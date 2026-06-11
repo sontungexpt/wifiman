@@ -47,10 +47,15 @@ public class WifiViewModel : GLib.Object {
     private string search_text = "";
     private uint settle_scan_id = 0;
     private uint background_scan_id = 0;
+    private uint freshness_timer_id = 0;
+    private int64 freshest_scan = -1;
     private GLib.HashTable<string, bool> auto_connect_cooldowns;
     private GLib.HashTable<string, bool> disconnect_cooldowns;
     private const uint AUTO_CONNECT_COOLDOWN_MS = 20000;
     private const uint DISCONNECT_COOLDOWN_MS = 30000;
+    private bool _started = false;
+
+    public bool auto_reconnect_enabled { get; set; default = true; }
 
     public WifiViewModel (NetworkManagerService service) {
         this.service = service;
@@ -75,6 +80,8 @@ public class WifiViewModel : GLib.Object {
         rebuild ();
         update_connectivity_state ();
         start_background_scan ();
+        freshness_timer_id = Timeout.add_seconds (5, tick_freshness);
+        _started = true;
     }
 
     ~WifiViewModel () {
@@ -85,6 +92,10 @@ public class WifiViewModel : GLib.Object {
         if (background_scan_id != 0) {
             Source.remove (background_scan_id);
             background_scan_id = 0;
+        }
+        if (freshness_timer_id != 0) {
+            Source.remove (freshness_timer_id);
+            freshness_timer_id = 0;
         }
     }
 
@@ -136,6 +147,8 @@ public class WifiViewModel : GLib.Object {
     }
 
     public async void try_auto_connect (WifiNetwork network) {
+        if (!_started || !auto_reconnect_enabled) return;
+        if (has_active_wifi_connection ()) return;
         if (network.is_connected || network.is_connecting || network.auto_connecting) {
             return;
         }
@@ -176,7 +189,20 @@ public class WifiViewModel : GLib.Object {
         });
     }
 
+    private bool has_active_wifi_connection () {
+        foreach (var active in service.get_active_connections ()) {
+            if (active.get_connection_type () != "802-11-wireless") continue;
+            var state = active.get_state ();
+            if (state == NM.ActiveConnectionState.ACTIVATED || state == NM.ActiveConnectionState.ACTIVATING) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void try_auto_connect_all () {
+        if (!_started || !auto_reconnect_enabled) return;
+        if (has_active_wifi_connection ()) return;
         networks_by_ssid.foreach ((ssid, network) => {
             if (network.saved_connection == null) return;
             if (network.is_connected || network.is_connecting || network.auto_connecting) return;
@@ -363,7 +389,7 @@ public class WifiViewModel : GLib.Object {
     }
 
     private void update_scan_freshness () {
-        int64 freshest_scan = -1;
+        freshest_scan = -1;
 
         foreach (var device in service.get_devices ()) {
             if (!(device is NM.DeviceWifi)) {
@@ -377,8 +403,17 @@ public class WifiViewModel : GLib.Object {
             }
         }
 
+        apply_freshness ();
+    }
+
+    private void apply_freshness () {
         scan_freshness = WifiUtils.format_scan_age (freshest_scan);
         notify_property ("scan-freshness");
+    }
+
+    private bool tick_freshness () {
+        apply_freshness ();
+        return Source.CONTINUE;
     }
 
     private void rebuild_items () {
