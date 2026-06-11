@@ -45,7 +45,7 @@ public class MainWindow : Gtk.ApplicationWindow {
 
     private void load_css () {
         var provider = new Gtk.CssProvider ();
-        provider.load_from_resource ("/org/example/WifiVala/style.css");
+        provider.load_from_resource ("/io/github/sontungexpt/wifiman/style.css");
         Gtk.StyleContext.add_provider_for_display (
             Gdk.Display.get_default (),
             provider,

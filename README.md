@@ -1,4 +1,4 @@
-# Wi-Fi Vala
+# wifiman
 
 GTK4 Wi-Fi scanner written in Vala. The app is intentionally dependency-light:
 it uses GTK4 and libnm, and does not depend on libadwaita.
@@ -388,7 +388,7 @@ meson compile -C build
 Run the app with:
 
 ```bash
-./build/wifi-vala
+./build/wifiman
 ```
 
 ## Notes

@@ -1,4 +1,4 @@
-project('wifi-vala', 'vala', 'c',
+project('wifiman', 'vala', 'c',
   version: '0.1.0',
   license: 'GPL3+',
   meson_version: '>= 0.60.0'
