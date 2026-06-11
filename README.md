@@ -55,7 +55,8 @@ style.css                    Theme-aware GTK CSS
 ### `Application`
 
 - Owns the `Gtk.Application`
-- Handles activation and command-line `--version`
+- Handles activation and command-line `--version` and `--toggle`
+- Registers a `"toggle"` GAction for show/hide via CLI
 - Keeps startup minimal
 
 ### `MainWindow`
@@ -390,6 +391,20 @@ Run the app with:
 ```bash
 ./build/wifiman
 ```
+
+## CLI
+
+The app runs as a single Gtk.Application instance. All invocations route to the
+same process.
+
+| Command | Behavior |
+|---|---|
+| `./build/wifiman` | Launches the window, or brings it to focus if already running |
+| `./build/wifiman --toggle` | Launches the window, or hides/shows the existing instance |
+| `./build/wifiman --version` | Prints version and exits |
+
+Closing the window hides it instead of quitting. Scanning and auto-connect
+continue in the background. Use `--toggle` or re-launch to bring it back.
 
 ## Notes
 
