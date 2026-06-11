@@ -28,6 +28,10 @@ public class Application : Gtk.Application {
         if (window == null) {
             window = new MainWindow (this);
         }
+        apply_saved_color_scheme ();
+        if (window is MainWindow) {
+            ((MainWindow) window).sync_popover_class ();
+        }
         window.present ();
     }
 
@@ -46,6 +50,71 @@ public class Application : Gtk.Application {
 
         activate ();
         return 0;
+    }
+
+    private void apply_class_to_windows (bool dark) {
+        foreach (var w in get_windows ()) {
+            if (dark) w.add_css_class ("dark-mode");
+            else w.remove_css_class ("dark-mode");
+        }
+    }
+
+    public void apply_color_scheme (string scheme) {
+        var settings = Gtk.Settings.get_default ();
+        if (settings == null) return;
+
+        bool is_dark = false;
+        switch (scheme) {
+            case "dark":
+                settings.gtk_application_prefer_dark_theme = true;
+                is_dark = true;
+                break;
+            case "light":
+                settings.gtk_application_prefer_dark_theme = false;
+                is_dark = false;
+                break;
+            default:
+                try {
+                    var gnome_settings = new GLib.Settings ("org.gnome.desktop.interface");
+                    var color_scheme = gnome_settings.get_string ("color-scheme");
+                    is_dark = color_scheme == "prefer-dark";
+                    settings.gtk_application_prefer_dark_theme = is_dark;
+                } catch (GLib.Error e) {
+                    is_dark = false;
+                }
+                break;
+        }
+        apply_class_to_windows (is_dark);
+    }
+
+    private void apply_saved_color_scheme () {
+        apply_color_scheme (load_color_scheme ());
+    }
+
+    public string load_color_scheme () {
+        var config_file = Path.build_filename (
+            Environment.get_user_config_dir (), "wifiman", "settings.ini"
+        );
+        try {
+            var keyfile = new GLib.KeyFile ();
+            keyfile.load_from_file (config_file, GLib.KeyFileFlags.NONE);
+            return keyfile.get_string ("Settings", "color-scheme");
+        } catch (GLib.Error e) {
+            return "system";
+        }
+    }
+
+    public void save_color_scheme (string scheme) {
+        var config_dir = Path.build_filename (Environment.get_user_config_dir (), "wifiman");
+        DirUtils.create_with_parents (config_dir, 0755);
+        var config_file = Path.build_filename (config_dir, "settings.ini");
+        try {
+            var keyfile = new GLib.KeyFile ();
+            keyfile.set_string ("Settings", "color-scheme", scheme);
+            keyfile.save_to_file (config_file);
+        } catch (GLib.Error e) {
+            warning ("Failed to save color scheme: %s", e.message);
+        }
     }
 }
 

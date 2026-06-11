@@ -4,6 +4,7 @@ using GLib;
 public class MainWindow : Gtk.ApplicationWindow {
     private WifiViewModel manager;
     private Gtk.Button refresh_button;
+    private Gtk.Popover? menu_popover = null;
     private Gtk.Spinner spinner;
     private Gtk.SearchEntry search_entry;
     private Gtk.Stack stack;
@@ -72,6 +73,9 @@ public class MainWindow : Gtk.ApplicationWindow {
 
         var header = new Gtk.HeaderBar ();
         header.show_title_buttons = true;
+        var title_label = new Gtk.Label ("Wi-Fi");
+        title_label.add_css_class ("app-title");
+        header.title_widget = title_label;
         set_titlebar (header);
 
         refresh_button = new Gtk.Button.from_icon_name ("view-refresh-symbolic");
@@ -105,35 +109,92 @@ public class MainWindow : Gtk.ApplicationWindow {
     }
 
     private Gtk.Popover build_menu_popover () {
-        var popover = new Gtk.Popover ();
-        var box = new Gtk.Box (Gtk.Orientation.VERTICAL, 12);
-        box.margin_top = 12;
-        box.margin_bottom = 12;
-        box.margin_start = 12;
-        box.margin_end = 12;
-        popover.set_child (box);
+        menu_popover = new Gtk.Popover ();
+        if (this.has_css_class ("dark-mode"))
+            menu_popover.add_css_class ("dark-mode");
 
-        var wifi_row = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 12);
-        var label = new Gtk.Label ("Wi-Fi");
-        label.hexpand = true;
-        label.xalign = 0.0f;
+        // High-priority CSS to guarantee dark background on the popover surface
+        try {
+            var css = new Gtk.CssProvider ();
+            css.load_from_string (".dark-mode { background: #111827; border: none; outline: none; padding: 0; }");
+            menu_popover.get_style_context ().add_provider (css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
+        } catch (GLib.Error e) {
+            warning ("Failed to load popover CSS: %s", e.message);
+        }
+
+        var box = new Gtk.Box (Gtk.Orientation.VERTICAL, 12);
+        box.add_css_class ("popover-content");
+        menu_popover.set_child (box);
+
         var wifi_switch = new Gtk.Switch ();
         wifi_switch.active = manager.wireless_enabled;
         wifi_switch.notify["active"].connect (() => {
             manager.wireless_enabled = wifi_switch.active;
         });
-        wifi_row.append (label);
-        wifi_row.append (wifi_switch);
-        box.append (wifi_row);
+        box.append (build_setting_row ("Wi-Fi", wifi_switch));
+
+        var app = this.application as Application;
+        if (app != null)
+            box.append (build_setting_row ("Color Scheme", build_color_scheme_radios (app)));
 
         var refresh = new Gtk.Button.with_label ("Refresh Networks");
         refresh.clicked.connect (() => {
             manager.scan.begin ();
-            popover.popdown ();
+            menu_popover.popdown ();
         });
         box.append (refresh);
 
-        return popover;
+        return menu_popover;
+    }
+
+    private Gtk.Box build_setting_row (string text, Gtk.Widget control) {
+        var row = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 12);
+        var label = new Gtk.Label (text);
+        label.hexpand = true;
+        label.xalign = 0.0f;
+        label.add_css_class ("popover-label");
+        row.append (label);
+        row.append (control);
+        return row;
+    }
+
+    private Gtk.Box build_color_scheme_radios (Application app) {
+        var box = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 4);
+        string current = app.load_color_scheme ();
+        string[] schemes = {"system", "light", "dark"};
+        Gtk.CheckButton? group = null;
+
+        foreach (string scheme in schemes) {
+            var rb = new Gtk.CheckButton.with_label (
+                scheme == "system" ? "System" : scheme == "light" ? "Light" : "Dark"
+            );
+            if (group == null)
+                group = rb;
+            else
+                rb.group = group;
+
+            if (current == scheme)
+                rb.active = true;
+
+            rb.toggled.connect (() => {
+                if (rb.active) {
+                    app.save_color_scheme (scheme);
+                    app.apply_color_scheme (scheme);
+                    sync_popover_class ();
+                }
+            });
+            box.append (rb);
+        }
+
+        return box;
+    }
+
+    public void sync_popover_class () {
+        if (menu_popover == null) return;
+        if (this.has_css_class ("dark-mode"))
+            menu_popover.add_css_class ("dark-mode");
+        else
+            menu_popover.remove_css_class ("dark-mode");
     }
 
     private Gtk.Widget build_loading_page () {
@@ -504,6 +565,9 @@ public class MainWindow : Gtk.ApplicationWindow {
         dialog.resizable = false;
         dialog.default_width = 400;
         dialog.add_css_class ("dialog-window");
+        if (Gtk.Settings.get_default ().gtk_application_prefer_dark_theme) {
+            dialog.add_css_class ("dark-mode");
+        }
         build_dialog_titlebar (dialog, "Connect to " + network.ssid);
 
         var body = new Gtk.Box (Gtk.Orientation.VERTICAL, 0);
@@ -577,6 +641,9 @@ public class MainWindow : Gtk.ApplicationWindow {
         dialog.resizable = false;
         dialog.default_width = 400;
         dialog.add_css_class ("dialog-window");
+        if (this.has_css_class ("dark-mode")) {
+            dialog.add_css_class ("dark-mode");
+        }
         build_dialog_titlebar (dialog, "Network");
 
         var box = new Gtk.Box (Gtk.Orientation.VERTICAL, 0);
@@ -682,6 +749,13 @@ public class MainWindow : Gtk.ApplicationWindow {
         close_button.add_css_class ("flat");
         close_button.add_css_class ("dialog-close");
         close_button.clicked.connect (() => dialog.close ());
+
+        close_button.halign = Gtk.Align.END;
+        close_button.valign = Gtk.Align.FILL;
+        close_button.margin_end = 0;
+        close_button.margin_top = 0;
+        close_button.margin_bottom = 0;
+
         header.pack_end (close_button);
 
         dialog.set_titlebar (header);
