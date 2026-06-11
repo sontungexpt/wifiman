@@ -130,6 +130,9 @@ public class MainWindow : Gtk.ApplicationWindow {
         wifi_switch.active = manager.wireless_enabled;
         wifi_switch.notify["active"].connect (() => {
             manager.wireless_enabled = wifi_switch.active;
+            if (!wifi_switch.active) {
+                this.close ();
+            }
         });
         box.append (build_setting_row ("Wi-Fi", wifi_switch));
 

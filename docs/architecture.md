@@ -37,8 +37,9 @@ src/
   viewmodels/WifiViewModel.vala
                               UI-facing network state, sorting, filtering,
                               grouping, and action forwarding
-  widgets/WifiNetworkRow.vala
-                              Reusable GTK row used for network rendering
+   widgets/WifiNetworkRow.vala
+                               Reusable GTK row used for network rendering
+   widgets/SignalIcon.vala     Cairo-drawn Wi-Fi signal strength indicator
   utils/WifiUtils.vala        SSID, security, and icon helper functions
 data/
   resources.gresource.xml     Resource manifest for CSS and UI assets
@@ -127,7 +128,6 @@ docs/
 - Pre-computes `lower_ssid` on SSID set for O(1) case-insensitive search matching
 - Exposes computed properties for:
   - `subtitle`
-  - `signal_icon_name`
   - `primary_status` (including a "Previously saved" badge for known profiles)
   - `primary_status_style`
 - Tracks transient `auto_connecting` state with `connecting_status_text`
@@ -146,19 +146,26 @@ docs/
 - Updates live when network properties change, including auto-connect status
 - Adds the hero styling for the connected network
 - Exposes a right-click action path for row menus and details
-- Renders compact metric pills for signal, speed, and freshness
+- Renders compact metric pills for signal and speed
+
+### `SignalIcon`
+
+- Custom `Gtk.DrawingArea` that draws 4 Wi-Fi arc bars with Cairo
+- `strength` property maps 0-100 to 0–4 filled bars
+- No icon-theme dependency — works identically on every system
+- Uses CSS color from `Gtk.StyleContext.get_color()` for theme awareness
+- Respects `.signal-icon` CSS class rules
 
 ### `WifiUtils`
 
 - Converts SSID bytes to safe display strings
-- Maps signal strength to symbolic icons
 - Maps NM security flags to app-level security values
 
 ## Features
 
 - Scan for nearby Wi-Fi networks in real time
 - Show only SSIDs currently detected in scan results
-- Toggle wireless on or off from the menu
+- Toggle wireless on or off from the menu (turning Wi-Fi OFF closes the app)
 - Search available networks by SSID (scan results only)
 - Keep the search field visible even when no results match
 - Always show the connected network as a hero row, even when it is not in the
@@ -294,7 +301,7 @@ Suggested additions:
 ## Base Feature Mapping
 
 - Scan nearby networks -> continuous scanning plus cached freshness labels
-- Wireless toggle -> same menu control, plus auto-reconnect policy handling
+- Wireless toggle -> closes the app when turned OFF, plus auto-reconnect policy handling
 - Search by SSID -> debounced search with persistent search field
 - Connected hero + available scan results -> same grouping, plus richer badges
 - Connected hero row -> compact dashboard with SSID, signal, IP, and speed
@@ -404,10 +411,10 @@ Key style classes:
 - `.dialog-close` — 46×46px hit-box, `border-radius: 0 12px 0 0`,
   zero padding/margin/border, hover background
 - `.dialog-body`
+- `.dialog-input` — compact entry styling (28px min-height, 6px border-radius)
 - `.dialog-field-label`
 - `.dialog-cancel`
 - `.dialog-error`
 
 Dark mode uses `.dark-mode` class on windows and popovers (not `@media`
-queries), toggled at runtime via
-`gtk_application_prefer_dark_theme` + CSS class sync.
+queries), toggled at runtime via CSS class sync.

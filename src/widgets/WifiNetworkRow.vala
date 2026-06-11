@@ -12,7 +12,6 @@ public class WifiNetworkRow : Gtk.Box {
     private Gtk.Box metrics_box;
     private Gtk.Label signal_metric_label;
     private Gtk.Label speed_metric_label;
-    private Gtk.Label freshness_metric_label;
     private Gtk.Label primary_status_label;
     private Gtk.Label security_status_label;
 
@@ -110,9 +109,6 @@ public class WifiNetworkRow : Gtk.Box {
 
         speed_metric_label = build_metric_label ();
         metrics_box.append (speed_metric_label);
-
-        freshness_metric_label = build_metric_label ();
-        metrics_box.append (freshness_metric_label);
 
         var context_menu = new Gtk.GestureClick ();
         context_menu.set_button (3);
@@ -270,11 +266,7 @@ public class WifiNetworkRow : Gtk.Box {
         speed_metric_label.label = network.bitrate_detail;
         speed_metric_label.visible = speed_metric_label.label.length > 0;
 
-        freshness_metric_label.label = network.scan_age_text;
-        freshness_metric_label.visible = freshness_metric_label.label.length > 0;
-
         metrics_box.visible = signal_metric_label.visible
-            || speed_metric_label.visible
-            || freshness_metric_label.visible;
+            || speed_metric_label.visible;
     }
 }
