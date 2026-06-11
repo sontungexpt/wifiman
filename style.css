@@ -21,6 +21,18 @@ stack {
   padding: 32px 24px;
 }
 
+.status-strip {
+  margin-top: 2px;
+  margin-bottom: 2px;
+}
+
+.portal-banner {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: alpha(@warning_color, 0.10);
+  border: 1px solid alpha(@warning_color, 0.18);
+}
+
 .premium-search {
   min-height: 42px;
   padding: 10px 16px;
@@ -114,6 +126,20 @@ stack {
   opacity: 0.6;
 }
 
+.network-metrics {
+  margin-top: 2px;
+}
+
+.network-metric {
+  margin: 0;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: alpha(@window_fg_color, 0.05);
+  font-size: 11px;
+  font-weight: 500;
+  color: alpha(@window_fg_color, 0.72);
+}
+
 .status-badge {
   margin: 0;
   padding: 4px 10px;
@@ -122,6 +148,30 @@ stack {
   font-size: 11px;
   font-weight: 500;
   color: alpha(@window_fg_color, 0.60);
+}
+
+.status-badge.warning,
+.network-metric.warning {
+  background: alpha(@warning_color, 0.10);
+  color: alpha(@warning_color, 0.88);
+}
+
+.status-badge.connected,
+.network-metric.connected {
+  background: alpha(@accent_bg_color, 0.12);
+  color: alpha(@accent_bg_color, 0.95);
+}
+
+.status-badge.connecting,
+.network-metric.connecting {
+  background: alpha(@success_color, 0.10);
+  color: alpha(@success_color, 0.90);
+}
+
+.status-badge.failed,
+.network-metric.failed {
+  background: alpha(@error_color, 0.10);
+  color: alpha(@error_color, 0.90);
 }
 
 .signal-icon {
@@ -158,6 +208,11 @@ stack {
   border: 1px solid rgba(255, 255, 255, 0.18);
 }
 
+.hero-network .network-metric {
+  background: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.90);
+}
+
 .state-page {
   padding: 28px 24px;
 }
@@ -167,32 +222,181 @@ stack {
   margin-bottom: 5px;
 }
 
-.state-title,
-.dialog-title {
+.state-title {
   font-size: 18px;
   font-weight: 700;
 }
 
+/* ── Dialog Window ───────────────────────────────────────────── */
+
 .dialog-window {
-  background: #f6f6f7;
+  background: #f5f5f7;
 }
+
+/* ── Header Bar ─────────────────────────────────────────────── */
+
+.dialog-headerbar {
+  min-height: 46px;
+  padding: 0 8px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.dialog-header-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.dialog-close {
+  min-width: 32px;
+  min-height: 32px;
+  border-radius: 8px;
+}
+
+/* ── Body (flattened — inner card removed) ──────────────────── */
+
+.dialog-body {
+  padding: 24px;
+}
+
+.dialog-body > * + * {
+  margin-top: 20px;
+}
+
+/* ── Network name heading (network actions dialog) ──────────── */
+
+.dialog-network-name {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.dialog-network-meta {
+  font-size: 13px;
+  opacity: 0.60;
+}
+
+/* ── Input Labels ───────────────────────────────────────────── */
+
+.dialog-field-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.65);
+}
+
+/* ── Text Entry / Password Entry ────────────────────────────── */
 
 .dialog-window entry,
 .dialog-window passwordentry {
-  min-width: 280px;
+  min-height: 46px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.10);
+  color: rgba(0, 0, 0, 0.85);
+  font-size: 14px;
 }
+
+.dialog-window entry:focus-within,
+.dialog-window passwordentry:focus-within {
+  border-color: #3584e4;
+  box-shadow: 0 0 0 3px rgba(53, 132, 228, 0.18);
+}
+
+/* ── Error Box ──────────────────────────────────────────────── */
+
+.dialog-error {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: alpha(@error_color, 0.08);
+  border: 1px solid alpha(@error_color, 0.16);
+  color: @error_color;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.dialog-error image {
+  color: @error_color;
+}
+
+/* ── Dialog Actions ──────────────────────────────────────────── */
+
+.dialog-actions {
+  margin-top: 4px;
+}
+
+/* ── Detail Grid (network actions dialog) ───────────────────── */
+
+.details-expander,
+.details-grid {
+  margin-top: 8px;
+}
+
+.detail-key {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.72;
+}
+
+.detail-value {
+  font-size: 12px;
+}
+
+/* ── Universal Button Radius ────────────────────────────────── */
 
 button {
-  border-radius: 10px;
+  border-radius: 12px;
 }
 
-button.suggested-action {
-  background: alpha(@accent_bg_color, 0.10);
+.dialog-window button {
+  min-height: 40px;
+  min-width: 96px;
+  padding: 0 16px;
+  font-weight: 600;
 }
 
-button.destructive-action {
-  background: alpha(@error_color, 0.08);
+/* ── Cancel (Ghost / Secondary) ──────────────────────────────── */
+
+.dialog-window button.dialog-cancel {
+  background: transparent;
+  color: rgba(0, 0, 0, 0.65);
+  border: 1px solid rgba(0, 0, 0, 0.15);
 }
+
+.dialog-window button.dialog-cancel:hover {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.25);
+}
+
+/* ── Connect (Primary / Suggested Action) ────────────────────── */
+
+.dialog-window button.suggested-action {
+  background: #3584e4;
+  color: #ffffff;
+  border: none;
+}
+
+.dialog-window button.suggested-action:hover {
+  background: #1a5fb4;
+}
+
+.dialog-window button.suggested-action:disabled {
+  background: rgba(53, 132, 228, 0.40);
+  color: rgba(255, 255, 255, 0.80);
+}
+
+/* ── Destructive Action ──────────────────────────────────────── */
+
+.dialog-window button.destructive-action {
+  background: @error_color;
+  color: #ffffff;
+  border: none;
+}
+
+.dialog-window button.destructive-action:hover {
+  background: shade(@error_color, 1.08);
+}
+
+/* ── Generic entry radii (lowest priority) ──────────────────── */
 
 entry,
 passwordentry,

@@ -8,6 +8,12 @@ public class MainWindow : Gtk.ApplicationWindow {
     private Gtk.SearchEntry search_entry;
     private Gtk.Stack stack;
     private Gtk.Box content_shell;
+    private Gtk.Box status_strip;
+    private Gtk.Label scan_status_label;
+    private Gtk.Label connectivity_status_label;
+    private Gtk.Box portal_banner;
+    private Gtk.Label portal_label;
+    private Gtk.Button portal_refresh_button;
     private Gtk.Box hero_container;
     private Gtk.ListBox network_list;
     private Gtk.Box search_empty_box;
@@ -17,6 +23,7 @@ public class MainWindow : Gtk.ApplicationWindow {
     private Gtk.Label empty_subtitle;
     private Gtk.Label error_title;
     private Gtk.Label error_subtitle;
+    private uint search_debounce_id = 0;
 
     public MainWindow (Gtk.Application application) {
         Object (
@@ -196,8 +203,47 @@ public class MainWindow : Gtk.ApplicationWindow {
         search_entry.placeholder_text = "Search networks";
         search_entry.hexpand = true;
         search_entry.add_css_class ("premium-search");
-        search_entry.search_changed.connect (() => manager.set_search_text (search_entry.text));
+        search_entry.search_changed.connect (() => queue_search_update ());
         content_shell.append (search_entry);
+
+        status_strip = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 12);
+        status_strip.hexpand = true;
+        status_strip.add_css_class ("status-strip");
+
+        scan_status_label = new Gtk.Label ("");
+        scan_status_label.hexpand = true;
+        scan_status_label.xalign = 0.0f;
+        scan_status_label.add_css_class ("dim-label");
+        status_strip.append (scan_status_label);
+
+        connectivity_status_label = new Gtk.Label ("");
+        connectivity_status_label.xalign = 1.0f;
+        connectivity_status_label.add_css_class ("dim-label");
+        status_strip.append (connectivity_status_label);
+
+        content_shell.append (status_strip);
+
+        portal_banner = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 12);
+        portal_banner.hexpand = true;
+        portal_banner.visible = false;
+        portal_banner.add_css_class ("portal-banner");
+
+        var portal_icon = new Gtk.Image.from_icon_name ("dialog-warning-symbolic");
+        portal_icon.pixel_size = 16;
+        portal_banner.append (portal_icon);
+
+        portal_label = new Gtk.Label ("Captive portal detected. Sign-in may be required.");
+        portal_label.hexpand = true;
+        portal_label.xalign = 0.0f;
+        portal_label.wrap = true;
+        portal_banner.append (portal_label);
+
+        portal_refresh_button = new Gtk.Button.with_label ("Refresh");
+        portal_refresh_button.add_css_class ("flat");
+        portal_refresh_button.clicked.connect (() => manager.scan.begin ());
+        portal_banner.append (portal_refresh_button);
+
+        content_shell.append (portal_banner);
 
         hero_container = new Gtk.Box (Gtk.Orientation.VERTICAL, 0);
         hero_container.hexpand = true;
@@ -210,11 +256,11 @@ public class MainWindow : Gtk.ApplicationWindow {
         search_empty_box.halign = Gtk.Align.CENTER;
         search_empty_box.add_css_class ("search-empty");
 
-        search_empty_title = new Gtk.Label ("No networks match your search");
+        search_empty_title = new Gtk.Label ("No available networks match your search");
         search_empty_title.add_css_class ("state-title");
         search_empty_box.append (search_empty_title);
 
-        search_empty_subtitle = new Gtk.Label ("Clear the search field to show all networks again.");
+        search_empty_subtitle = new Gtk.Label ("Clear the search field to show all available networks again.");
         search_empty_subtitle.add_css_class ("dim-label");
         search_empty_box.append (search_empty_subtitle);
 
@@ -243,6 +289,10 @@ public class MainWindow : Gtk.ApplicationWindow {
         manager.notify["has-networks"].connect (update_state);
         manager.notify["search-active"].connect (update_state);
         manager.notify["has-visible-networks"].connect (update_state);
+        manager.notify["has-connected-network"].connect (update_state);
+        manager.notify["captive-portal"].connect (update_status_strip);
+        manager.notify["connectivity-text"].connect (update_status_strip);
+        manager.notify["scan-freshness"].connect (update_status_strip);
         manager.items.items_changed.connect (() => {
             update_state ();
             render_networks ();
@@ -261,15 +311,37 @@ public class MainWindow : Gtk.ApplicationWindow {
 
         if (manager.scanning && !manager.has_networks) {
             stack.visible_child_name = "loading";
-        } else if (manager.search_active && !manager.has_visible_networks) {
-            stack.visible_child_name = "results";
-        } else if (manager.has_networks) {
+        } else if (manager.has_networks || manager.search_active) {
             stack.visible_child_name = "results";
         } else {
             stack.visible_child_name = "empty";
         }
 
+        update_status_strip ();
         render_networks ();
+    }
+
+    private void update_status_strip () {
+        if (scan_status_label == null || connectivity_status_label == null || portal_banner == null) {
+            return;
+        }
+
+        scan_status_label.label = manager.scan_freshness;
+        connectivity_status_label.label = manager.connectivity_text;
+        portal_banner.visible = manager.captive_portal;
+    }
+
+    private void queue_search_update () {
+        if (search_debounce_id != 0) {
+            Source.remove (search_debounce_id);
+            search_debounce_id = 0;
+        }
+
+        search_debounce_id = Timeout.add (120, () => {
+            search_debounce_id = 0;
+            manager.set_search_text (search_entry.text);
+            return Source.REMOVE;
+        });
     }
 
     private void render_networks () {
@@ -282,7 +354,6 @@ public class MainWindow : Gtk.ApplicationWindow {
 
         bool show_search_empty = manager.search_active && !manager.has_visible_networks;
         search_empty_box.visible = show_search_empty;
-        hero_container.visible = !show_search_empty;
         network_list.visible = !show_search_empty;
 
         bool hero_rendered = false;
@@ -322,9 +393,7 @@ public class MainWindow : Gtk.ApplicationWindow {
             network_list.append (build_network_row (item, false));
         }
 
-        if (!show_search_empty) {
-            hero_container.visible = hero_container.get_first_child () != null;
-        }
+        hero_container.visible = hero_container.get_first_child () != null;
     }
 
     private void clear_container (Gtk.Box box) {
@@ -364,6 +433,7 @@ public class MainWindow : Gtk.ApplicationWindow {
         var widget = new WifiNetworkRow ();
         widget.set_item (item);
         widget.set_hero (hero);
+        widget.request_actions.connect ((network) => show_network_actions (network));
         row.set_child (widget);
         return row;
     }
@@ -372,6 +442,7 @@ public class MainWindow : Gtk.ApplicationWindow {
         var widget = new WifiNetworkRow ();
         widget.set_item (item);
         widget.set_hero (true);
+        widget.request_actions.connect ((network) => show_network_actions (network));
 
         var gesture = new Gtk.GestureClick ();
         gesture.released.connect ((n_press, x, y) => {
@@ -417,55 +488,60 @@ public class MainWindow : Gtk.ApplicationWindow {
 
     private void show_connect_dialog (WifiNetwork network) {
         var dialog = new Gtk.Window ();
-        dialog.title = "Connect to %s".printf (network.ssid);
+        dialog.title = network.ssid;
         dialog.transient_for = this;
         dialog.modal = true;
         dialog.resizable = false;
-        dialog.default_width = 360;
+        dialog.default_width = 400;
         dialog.add_css_class ("dialog-window");
+        build_dialog_titlebar (dialog, "Connect to " + network.ssid);
 
-        var box = new Gtk.Box (Gtk.Orientation.VERTICAL, 18);
-        box.margin_top = 24;
-        box.margin_bottom = 24;
-        box.margin_start = 24;
-        box.margin_end = 24;
-        dialog.set_child (box);
-
-        var title = new Gtk.Label ("Connect to %s".printf (network.ssid));
-        title.xalign = 0.0f;
-        title.add_css_class ("dialog-title");
-        box.append (title);
+        var body = new Gtk.Box (Gtk.Orientation.VERTICAL, 0);
+        body.add_css_class ("dialog-body");
+        dialog.set_child (body);
 
         Gtk.Entry? username_entry = null;
         if (network.enterprise) {
             username_entry = new Gtk.Entry ();
-            username_entry.placeholder_text = "Username";
-            box.append (username_entry);
+            username_entry.placeholder_text = "Enter username";
+            body.append (build_dialog_field ("Username", username_entry));
         }
 
         var password_entry = new Gtk.PasswordEntry ();
-        password_entry.placeholder_text = "Password";
-        box.append (password_entry);
+        password_entry.placeholder_text = "Enter password";
+        body.append (build_dialog_field ("Password", password_entry));
+
+        var error_box = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 8);
+        error_box.add_css_class ("dialog-error");
+        error_box.visible = false;
+
+        var error_icon = new Gtk.Image.from_icon_name ("dialog-warning-symbolic");
+        error_icon.pixel_size = 16;
+        error_box.append (error_icon);
 
         var error_label = new Gtk.Label ("");
         error_label.xalign = 0.0f;
+        error_label.hexpand = true;
         error_label.wrap = true;
-        error_label.visible = false;
-        error_label.add_css_class ("error");
-        box.append (error_label);
+        error_box.append (error_label);
+        body.append (error_box);
 
-        var actions = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 12);
+        var actions = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 10);
+        actions.add_css_class ("dialog-actions");
         actions.halign = Gtk.Align.END;
+
         var cancel = new Gtk.Button.with_label ("Cancel");
+        cancel.add_css_class ("dialog-cancel");
         var connect = new Gtk.Button.with_label ("Connect");
         connect.add_css_class ("suggested-action");
         actions.append (cancel);
         actions.append (connect);
-        box.append (actions);
+        body.append (actions);
 
         cancel.clicked.connect (() => dialog.close ());
         connect.clicked.connect (() => {
             connect.sensitive = false;
+            error_box.visible = false;
             var username = username_entry != null ? username_entry.text : null;
             manager.connect_network.begin (network, password_entry.text, username, (obj, res) => {
                 try {
@@ -473,13 +549,14 @@ public class MainWindow : Gtk.ApplicationWindow {
                     dialog.close ();
                 } catch (GLib.Error e) {
                     error_label.label = e.message;
-                    error_label.visible = true;
+                    error_box.visible = true;
                     connect.sensitive = true;
                 }
             });
         });
 
         dialog.present ();
+        password_entry.grab_focus ();
     }
 
     private void show_network_actions (WifiNetwork network) {
@@ -488,35 +565,70 @@ public class MainWindow : Gtk.ApplicationWindow {
         dialog.transient_for = this;
         dialog.modal = true;
         dialog.resizable = false;
-        dialog.default_width = 360;
+        dialog.default_width = 400;
         dialog.add_css_class ("dialog-window");
+        build_dialog_titlebar (dialog, "Network");
 
-        var box = new Gtk.Box (Gtk.Orientation.VERTICAL, 18);
-        box.margin_top = 24;
-        box.margin_bottom = 24;
-        box.margin_start = 24;
-        box.margin_end = 24;
+        var box = new Gtk.Box (Gtk.Orientation.VERTICAL, 0);
+        box.add_css_class ("dialog-body");
         dialog.set_child (box);
 
+        var heading = new Gtk.Box (Gtk.Orientation.VERTICAL, 4);
         var title = new Gtk.Label (network.ssid);
         title.xalign = 0.0f;
-        title.add_css_class ("dialog-title");
-        box.append (title);
+        title.ellipsize = Pango.EllipsizeMode.END;
+        title.add_css_class ("dialog-network-name");
+        heading.append (title);
 
-        var detail = new Gtk.Label (network.subtitle);
+        var detail = new Gtk.Label (network.detail_summary);
         detail.xalign = 0.0f;
-        detail.add_css_class ("dim-label");
-        box.append (detail);
+        detail.add_css_class ("dialog-network-meta");
+        detail.wrap = true;
+        heading.append (detail);
+        box.append (heading);
 
-        var actions = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 12);
+        var expander = new Gtk.Expander ("Network details");
+        expander.expanded = true;
+        expander.add_css_class ("details-expander");
+        box.append (expander);
+
+        var grid = new Gtk.Grid ();
+        grid.column_spacing = 18;
+        grid.row_spacing = 8;
+        grid.add_css_class ("details-grid");
+        expander.set_child (grid);
+
+        var row = 0;
+        add_detail_row (grid, row++, "Security", network.security_badge_text);
+        add_detail_row (grid, row++, "Band", network.band);
+        add_detail_row (grid, row++, "Signal", network.signal_dbm_text);
+        add_detail_row (grid, row++, "Speed", network.bitrate_detail);
+        add_detail_row (grid, row++, "Health", network.health_text);
+        add_detail_row (grid, row++, "IP address", network.ip_address);
+        add_detail_row (grid, row++, "Gateway", network.gateway);
+        add_detail_row (grid, row++, "DNS", network.dns_summary);
+        add_detail_row (grid, row++, "Scan freshness", network.scan_age_text);
+        add_detail_row (grid, row++, "Warnings", network.warning_text);
+
+        var actions = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 10);
+        actions.add_css_class ("dialog-actions");
         actions.halign = Gtk.Align.END;
         var close = new Gtk.Button.with_label ("Close");
+        close.add_css_class ("dialog-cancel");
         actions.append (close);
 
         if (network.is_connected) {
+            var reconnect = new Gtk.Button.with_label ("Reconnect");
+            reconnect.clicked.connect (() => {
+                manager.reconnect_network.begin (network);
+                dialog.close ();
+            });
+            actions.append (reconnect);
+
             var disconnect = new Gtk.Button.with_label ("Disconnect");
             disconnect.add_css_class ("destructive-action");
             disconnect.clicked.connect (() => {
+                manager.record_disconnect (network.ssid);
                 manager.disconnect_network.begin (network);
                 dialog.close ();
             });
@@ -544,5 +656,50 @@ public class MainWindow : Gtk.ApplicationWindow {
         close.clicked.connect (() => dialog.close ());
         box.append (actions);
         dialog.present ();
+    }
+
+    private void build_dialog_titlebar (Gtk.Window dialog, string title) {
+        var header = new Gtk.HeaderBar ();
+        header.show_title_buttons = false;
+        header.add_css_class ("dialog-headerbar");
+
+        var title_label = new Gtk.Label (title);
+        title_label.add_css_class ("dialog-header-title");
+        header.title_widget = title_label;
+
+        var close_button = new Gtk.Button.from_icon_name ("window-close-symbolic");
+        close_button.tooltip_text = "Close";
+        close_button.add_css_class ("flat");
+        close_button.add_css_class ("dialog-close");
+        close_button.clicked.connect (() => dialog.close ());
+        header.pack_end (close_button);
+
+        dialog.set_titlebar (header);
+    }
+
+    private Gtk.Box build_dialog_field (string label_text, Gtk.Widget field) {
+        var container = new Gtk.Box (Gtk.Orientation.VERTICAL, 6);
+
+        var label = new Gtk.Label (label_text);
+        label.xalign = 0.0f;
+        label.add_css_class ("dialog-field-label");
+        container.append (label);
+        container.append (field);
+
+        return container;
+    }
+
+    private void add_detail_row (Gtk.Grid grid, int row, string key, string value) {
+        var key_label = new Gtk.Label (key);
+        key_label.xalign = 0.0f;
+        key_label.add_css_class ("detail-key");
+
+        var value_label = new Gtk.Label (value.length > 0 ? value : "—");
+        value_label.xalign = 0.0f;
+        value_label.wrap = true;
+        value_label.add_css_class ("detail-value");
+
+        grid.attach (key_label, 0, row, 1, 1);
+        grid.attach (value_label, 1, row, 1, 1);
     }
 }

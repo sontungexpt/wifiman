@@ -36,6 +36,19 @@ public class NetworkManagerService : GLib.Object {
 
     public bool available { get; private set; default = false; }
 
+    public NM.ConnectivityState connectivity {
+        get {
+            if (client == null) {
+                return NM.ConnectivityState.UNKNOWN;
+            }
+            return client.get_connectivity ();
+        }
+    }
+
+    public string connectivity_label {
+        owned get { return WifiUtils.connectivity_to_label (connectivity); }
+    }
+
     public NetworkManagerService () {
         try {
             client = new NM.Client (null);
@@ -158,6 +171,7 @@ public class NetworkManagerService : GLib.Object {
             changed ();
         });
         wireless_enabled_id = client.notify["wireless-enabled"].connect (() => changed ());
+        client.notify["connectivity"].connect (() => changed ());
     }
 
     private void connect_wifi_device (NM.DeviceWifi device) {
