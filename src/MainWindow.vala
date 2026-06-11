@@ -277,7 +277,7 @@ public class MainWindow : Gtk.ApplicationWindow {
         search_entry.placeholder_text = "Search networks";
         search_entry.hexpand = true;
         search_entry.add_css_class ("premium-search");
-        search_entry.search_changed.connect (() => queue_search_update ());
+        ((Gtk.Editable) search_entry).changed.connect (() => queue_search_update ());
         content_shell.append (search_entry);
 
         status_strip = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 12);
@@ -565,7 +565,7 @@ public class MainWindow : Gtk.ApplicationWindow {
         dialog.resizable = false;
         dialog.default_width = 400;
         dialog.add_css_class ("dialog-window");
-        if (Gtk.Settings.get_default ().gtk_application_prefer_dark_theme) {
+        if (this.has_css_class ("dark-mode")) {
             dialog.add_css_class ("dark-mode");
         }
         build_dialog_titlebar (dialog, "Connect to " + network.ssid);

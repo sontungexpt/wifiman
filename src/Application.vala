@@ -60,17 +60,12 @@ public class Application : Gtk.Application {
     }
 
     public void apply_color_scheme (string scheme) {
-        var settings = Gtk.Settings.get_default ();
-        if (settings == null) return;
-
         bool is_dark = false;
         switch (scheme) {
             case "dark":
-                settings.gtk_application_prefer_dark_theme = true;
                 is_dark = true;
                 break;
             case "light":
-                settings.gtk_application_prefer_dark_theme = false;
                 is_dark = false;
                 break;
             default:
@@ -78,7 +73,6 @@ public class Application : Gtk.Application {
                     var gnome_settings = new GLib.Settings ("org.gnome.desktop.interface");
                     var color_scheme = gnome_settings.get_string ("color-scheme");
                     is_dark = color_scheme == "prefer-dark";
-                    settings.gtk_application_prefer_dark_theme = is_dark;
                 } catch (GLib.Error e) {
                     is_dark = false;
                 }
