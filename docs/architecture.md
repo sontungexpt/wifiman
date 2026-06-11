@@ -115,6 +115,7 @@ docs/
 ### `WifiNetwork`
 
 - Holds SSID, BSSID, signal strength, security, band, and state
+- Pre-computes `lower_ssid` on SSID set for O(1) case-insensitive search matching
 - Exposes computed properties for:
   - `subtitle`
   - `signal_icon_name`

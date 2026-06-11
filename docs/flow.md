@@ -14,11 +14,10 @@ main.vala
                  │    └─ connect_active_connection ()  ← for each existing active connection
                  ├─ new WifiViewModel (nm_service)
                  │    ├─ connect service.changed → schedule_rebuild ()
-                 │    ├─ connect service.changed → update_connectivity_state ()
                  │    ├─ connect service.scan_started → scanning = true
                  │    ├─ connect service.scan_finished → scanning = false, schedule_rebuild ()
                  │    ├─ rebuild ()  ← initial snapshot (read-only, _started == false)
-                 │    ├─ update_connectivity_state ()
+                 │    │               └─ refresh_runtime_details ()  ← sets connectivity state
                  │    ├─ start_background_scan ()
                  │    ├─ freshness_timer_id = Timeout.add_seconds (5, tick_freshness)
                  │    └─ _started = true
@@ -124,18 +123,25 @@ NM signal changes
        ▼
   service.changed
        │
-       ├─ schedule_rebuild ()  →  rebuild ()  →  update_scan_freshness ()
-       │                                              │
-       │                                         (every 5s)
-       │                                              │
-       └─ update_connectivity_state ()           tick_freshness ()
-                                                     │
-                                                apply_freshness ()
-                                                     │
-                                                notify_property ("scan-freshness")
+       └─ schedule_rebuild ()  →  rebuild ()
+                                     │
+                                     ├─ refresh_runtime_details ()  ← sets connectivity state too
+                                     ├─ update_scan_freshness ()
+                                     ├─ rebuild_items ()
+                                     └─ try_auto_connect_all ()
+
+                                     (every 5s)
+                                         │
+                                    tick_freshness ()
+                                         │
+                                    apply_freshness ()
+                                         │
+                                    notify_property ("scan-freshness")
 ```
 
 The 5-second freshness timer is independent of rebuilds — it re-formats the stored `freshest_scan` timestamp so the label updates in real time between scans.
+
+Connectivity state is refreshed inside `rebuild()` via `refresh_runtime_details()`, so the separate `changed → update_connectivity_state()` signal handler was redundant and removed.
 
 ## User actions
 

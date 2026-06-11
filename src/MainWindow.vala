@@ -306,10 +306,7 @@ public class MainWindow : Gtk.ApplicationWindow {
         manager.notify["captive-portal"].connect (update_status_strip);
         manager.notify["connectivity-text"].connect (update_status_strip);
         manager.notify["scan-freshness"].connect (update_status_strip);
-        manager.items.items_changed.connect (() => {
-            update_state ();
-            render_networks ();
-        });
+        manager.items.items_changed.connect (() => update_state ());
         manager.error.connect ((message) => {
             error_subtitle.label = message;
             stack.visible_child_name = "error";

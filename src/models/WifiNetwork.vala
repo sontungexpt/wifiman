@@ -11,7 +11,15 @@ public enum WifiSecurity {
 }
 
 public class WifiNetwork : GLib.Object {
-    public string ssid { get; set; default = ""; }
+    private string _ssid = "";
+    public string ssid {
+        get { return _ssid; }
+        set {
+            _ssid = value;
+            lower_ssid = value.down ();
+        }
+    }
+    public string lower_ssid { get; private set; default = ""; }
     public string bssid { get; set; default = ""; }
     public int strength { get; set; default = 0; }
     public uint frequency { get; set; default = 0; }

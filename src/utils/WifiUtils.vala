@@ -192,7 +192,7 @@ public class WifiUtils : GLib.Object {
             return "";
         }
 
-        return ((string) data).make_valid ();
+        return ((string) data).make_valid ().strip ();
     }
 
     public static WifiSecurity security_from_access_point (NM.AccessPoint ap) {
