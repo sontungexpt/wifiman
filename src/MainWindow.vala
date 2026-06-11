@@ -578,11 +578,13 @@ public class MainWindow : Gtk.ApplicationWindow {
         if (network.enterprise) {
             username_entry = new Gtk.Entry ();
             username_entry.placeholder_text = "Enter username";
+            username_entry.add_css_class ("dialog-input");
             body.append (build_dialog_field ("Username", username_entry));
         }
 
         var password_entry = new Gtk.PasswordEntry ();
         password_entry.placeholder_text = "Enter password";
+        password_entry.add_css_class ("dialog-input");
         body.append (build_dialog_field ("Password", password_entry));
 
         var error_box = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 8);
