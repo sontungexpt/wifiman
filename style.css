@@ -266,24 +266,31 @@ stack {
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 
-.dialog-header-title {
-  font-size: 14px;
-  font-weight: 600;
-  margin: 0 12px;
-}
-
-.dialog-close {
-  min-width: 16px;
-  min-height: 16px;
-  padding: 0;
-  margin: 0;
-  border-radius: 999px;
-}
-
 headerbar.dialog-headerbar .end {
   padding: 0;
   margin: 0;
   min-width: 0;
+}
+
+.dialog-header-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.dialog-close {
+  min-width: 46px;
+  min-height: 46px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 0 12px 0 0;
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+}
+
+.dialog-close:hover {
+  background: rgba(0, 0, 0, 0.05);
 }
 
 headerbar.dialog-headerbar > box.end * {
@@ -636,7 +643,7 @@ popover .popover-content {
 }
 
 .dark-mode .dialog-close:hover {
-  background: alpha(white, 0.05);
+  background: alpha(white, 0.08);
   color: white;
 }
 

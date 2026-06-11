@@ -744,19 +744,17 @@ public class MainWindow : Gtk.ApplicationWindow {
         title_label.add_css_class ("dialog-header-title");
         header.title_widget = title_label;
 
-        var close_button = new Gtk.Button.from_icon_name ("window-close-symbolic");
-        close_button.tooltip_text = "Close";
-        close_button.add_css_class ("flat");
-        close_button.add_css_class ("dialog-close");
-        close_button.clicked.connect (() => dialog.close ());
+        var close_icon = new Gtk.Image.from_icon_name ("window-close-symbolic");
+        close_icon.tooltip_text = "Close";
+        close_icon.add_css_class ("dialog-close");
+        close_icon.halign = Gtk.Align.END;
+        close_icon.valign = Gtk.Align.CENTER;
 
-        close_button.halign = Gtk.Align.END;
-        close_button.valign = Gtk.Align.FILL;
-        close_button.margin_end = 0;
-        close_button.margin_top = 0;
-        close_button.margin_bottom = 0;
+        var click = new Gtk.GestureClick ();
+        click.released.connect (() => dialog.close ());
+        close_icon.add_controller (click);
 
-        header.pack_end (close_button);
+        header.pack_end (close_icon);
 
         dialog.set_titlebar (header);
     }
