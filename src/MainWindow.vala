@@ -41,6 +41,19 @@ public class MainWindow : Gtk.ApplicationWindow {
         build_ui ();
         bind_state ();
         manager.scan.begin ();
+
+        close_request.connect (() => {
+            set_visible (false);
+            return true;
+        });
+    }
+
+    public void toggle_visibility () {
+        if (visible) {
+            set_visible (false);
+        } else {
+            present ();
+        }
     }
 
     private void load_css () {
