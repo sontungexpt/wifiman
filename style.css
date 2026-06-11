@@ -1,0 +1,207 @@
+window {
+  background: #f6f6f7;
+}
+
+headerbar {
+  background: @headerbar_bg_color;
+  padding: 8px 12px;
+  border-bottom: 1px solid alpha(@window_fg_color, 0.04);
+}
+
+scrolledwindow,
+stack {
+  background: @window_bg_color;
+}
+
+.content-scroll {
+  background: #f6f6f7;
+}
+
+.content-shell {
+  padding: 32px 24px;
+}
+
+.premium-search {
+  min-height: 42px;
+  padding: 10px 16px;
+  border-radius: 99px;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+  transition: all 0.2s ease-in-out;
+}
+
+.premium-search:focus-within {
+  background: #ffffff;
+  border-color: alpha(@accent_bg_color, 0.26);
+}
+
+.hero-container {
+}
+
+.search-empty {
+  padding: 24px 12px;
+}
+
+.network-panel {
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 16px;
+  padding: 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+}
+
+.network-listbox {
+  background: transparent;
+}
+
+.network-listbox row,
+.network-listbox separator {
+  background: transparent;
+}
+
+.network-listbox separator {
+  min-height: 1px;
+  margin: 0 16px;
+  background: alpha(@window_fg_color, 0.05);
+}
+
+.section-row {
+  background: transparent;
+}
+
+.section-row-box {
+  padding: 14px 20px 8px;
+}
+
+.section-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.72;
+}
+
+.wifi-list-item {
+  background: transparent;
+}
+
+.network-row {
+  min-height: 56px;
+  padding: 16px 20px;
+  border-radius: 12px;
+  background: transparent;
+  transition: all 0.2s ease-in-out;
+}
+
+.network-row:hover {
+  background: alpha(@window_fg_color, 0.04);
+  transform: translateX(2px);
+}
+
+.network-row:focus-within {
+  background: alpha(@accent_bg_color, 0.08);
+}
+
+.ssid {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.network-subtitle {
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+.status-badge {
+  margin: 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: alpha(@window_fg_color, 0.05);
+  font-size: 11px;
+  font-weight: 500;
+  color: alpha(@window_fg_color, 0.60);
+}
+
+.signal-icon {
+  margin: 0;
+  opacity: 0.7;
+}
+
+.hero-network {
+  padding: 16px 20px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #3584e4, #1a5fb4);
+  box-shadow: 0 4px 12px rgba(35, 131, 228, 0.30);
+  transition: all 0.2s ease-in-out;
+}
+
+.hero-network:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(35, 131, 228, 0.34);
+}
+
+.hero-network .ssid,
+.hero-network .network-subtitle,
+.hero-network .status-badge,
+.hero-network .signal-icon {
+  color: white;
+}
+
+.hero-network .network-subtitle {
+  opacity: 0.72;
+}
+
+.hero-network .status-badge {
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.state-page {
+  padding: 28px 24px;
+}
+
+.state-page > * {
+  margin-top: 5px;
+  margin-bottom: 5px;
+}
+
+.state-title,
+.dialog-title {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.dialog-window {
+  background: #f6f6f7;
+}
+
+.dialog-window entry,
+.dialog-window passwordentry {
+  min-width: 280px;
+}
+
+button {
+  border-radius: 10px;
+}
+
+button.suggested-action {
+  background: alpha(@accent_bg_color, 0.10);
+}
+
+button.destructive-action {
+  background: alpha(@error_color, 0.08);
+}
+
+entry,
+passwordentry,
+searchentry {
+  border-radius: 10px;
+}
+
+entry:focus-within,
+passwordentry:focus-within,
+searchentry:focus-within {
+  border-color: alpha(@accent_bg_color, 0.32);
+}

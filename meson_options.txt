@@ -1,0 +1,13 @@
+# Add compiler arguments
+option('compiler_args',
+  type: 'array',
+  value: [],
+  description: 'Additional arguments to pass to the compiler'
+)
+
+# Build tests by default
+option('tests',
+  type: 'boolean',
+  value: true,
+  description: 'Build and run tests'
+)
