@@ -1,3 +1,22 @@
+/* ── Dark mode color tokens ──────────────────────────────────── */
+
+@define-color dark-bg #090d16;
+@define-color dark-surface #111827;
+@define-color dark-surface-alt #0f172a;
+@define-color dark-input #1f2937;
+@define-color dark-text #f1f5f9;
+@define-color dark-text-secondary #94a3b8;
+@define-color dark-text-tertiary #d1d5db;
+@define-color dark-accent #38bdf8;
+@define-color dark-accent-hover #7dd3fc;
+@define-color dark-accent-text #030712;
+@define-color dark-switch-bg #374151;
+@define-color dark-muted #6b7280;
+@define-color dark-danger #dc2626;
+@define-color dark-danger-hover #ef4444;
+
+/* ── Base layout ─────────────────────────────────────────────── */
+
 window {
   background: #f6f6f7;
 }
@@ -6,6 +25,12 @@ headerbar {
   background: @headerbar_bg_color;
   padding: 8px 12px;
   border-bottom: 1px solid alpha(@window_fg_color, 0.04);
+}
+
+.app-title {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 scrolledwindow,
@@ -29,14 +54,14 @@ stack {
 .portal-banner {
   padding: 12px 14px;
   border-radius: 14px;
-  background: alpha(@warning_color, 0.10);
+  background: alpha(@warning_color, 0.1);
   border: 1px solid alpha(@warning_color, 0.18);
 }
 
 .premium-search {
   min-height: 42px;
   padding: 10px 16px;
-  border-radius: 99px;
+  border-radius: 12px;
   background: #ffffff;
   border: 1px solid rgba(0, 0, 0, 0.08);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
@@ -147,12 +172,12 @@ stack {
   background: alpha(@window_fg_color, 0.05);
   font-size: 11px;
   font-weight: 500;
-  color: alpha(@window_fg_color, 0.60);
+  color: alpha(@window_fg_color, 0.6);
 }
 
 .status-badge.warning,
 .network-metric.warning {
-  background: alpha(@warning_color, 0.10);
+  background: alpha(@warning_color, 0.1);
   color: alpha(@warning_color, 0.88);
 }
 
@@ -164,14 +189,14 @@ stack {
 
 .status-badge.connecting,
 .network-metric.connecting {
-  background: alpha(@success_color, 0.10);
-  color: alpha(@success_color, 0.90);
+  background: alpha(@success_color, 0.1);
+  color: alpha(@success_color, 0.9);
 }
 
 .status-badge.failed,
 .network-metric.failed {
-  background: alpha(@error_color, 0.10);
-  color: alpha(@error_color, 0.90);
+  background: alpha(@error_color, 0.1);
+  color: alpha(@error_color, 0.9);
 }
 
 .signal-icon {
@@ -183,7 +208,7 @@ stack {
   padding: 16px 20px;
   border-radius: 14px;
   background: linear-gradient(135deg, #3584e4, #1a5fb4);
-  box-shadow: 0 4px 12px rgba(35, 131, 228, 0.30);
+  box-shadow: 0 4px 12px rgba(35, 131, 228, 0.3);
   transition: all 0.2s ease-in-out;
 }
 
@@ -204,13 +229,13 @@ stack {
 }
 
 .hero-network .status-badge {
-  background: rgba(255, 255, 255, 0.14);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: alpha(white, 0.14);
+  border: 1px solid alpha(white, 0.18);
 }
 
 .hero-network .network-metric {
-  background: rgba(255, 255, 255, 0.14);
-  color: rgba(255, 255, 255, 0.90);
+  background: alpha(white, 0.14);
+  color: alpha(white, 0.9);
 }
 
 .state-page {
@@ -237,8 +262,14 @@ stack {
 
 .dialog-headerbar {
   min-height: 46px;
-  padding: 0 8px;
+  padding: 0;
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+headerbar.dialog-headerbar .end {
+  padding: 0;
+  margin: 0;
+  min-width: 0;
 }
 
 .dialog-header-title {
@@ -247,9 +278,24 @@ stack {
 }
 
 .dialog-close {
-  min-width: 32px;
-  min-height: 32px;
-  border-radius: 8px;
+  min-width: 46px;
+  min-height: 46px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 0 12px 0 0;
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+}
+
+.dialog-close:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+headerbar.dialog-headerbar > box.end * {
+  margin: 0;
+  padding: 0;
 }
 
 /* ── Body (flattened — inner card removed) ──────────────────── */
@@ -272,7 +318,7 @@ stack {
 
 .dialog-network-meta {
   font-size: 13px;
-  opacity: 0.60;
+  opacity: 0.6;
 }
 
 /* ── Input Labels ───────────────────────────────────────────── */
@@ -291,7 +337,7 @@ stack {
   padding: 12px 14px;
   border-radius: 12px;
   background: #ffffff;
-  border: 1px solid rgba(0, 0, 0, 0.10);
+  border: 1px solid rgba(0, 0, 0, 0.1);
   color: rgba(0, 0, 0, 0.85);
   font-size: 14px;
 }
@@ -380,8 +426,8 @@ button {
 }
 
 .dialog-window button.suggested-action:disabled {
-  background: rgba(53, 132, 228, 0.40);
-  color: rgba(255, 255, 255, 0.80);
+  background: rgba(53, 132, 228, 0.4);
+  color: alpha(white, 0.8);
 }
 
 /* ── Destructive Action ──────────────────────────────────────── */
@@ -408,4 +454,293 @@ entry:focus-within,
 passwordentry:focus-within,
 searchentry:focus-within {
   border-color: alpha(@accent_bg_color, 0.32);
+}
+
+/* ── Popover (base — applies to both modes) ─────────────────── */
+
+popover,
+popover contents,
+popover arrow,
+.popover-content {
+  border-radius: 12px;
+}
+
+popover {
+  padding: 0;
+  border: none;
+  outline: none;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.15);
+}
+
+popover .popover-content {
+  border-radius: 12px;
+}
+
+.popover-content {
+  padding: 16px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DARK MODE
+   ═══════════════════════════════════════════════════════════════*/
+
+.dark-mode,
+.dark-mode.dialog-window {
+  background: @dark-bg;
+}
+
+.dark-mode .content-scroll {
+  background: @dark-bg;
+}
+
+.dark-mode .premium-search {
+  background: @dark-surface;
+  border: 1px solid alpha(white, 0.05);
+  color: #f3f4f6;
+}
+
+.dark-mode .premium-search:focus-within {
+  background: @dark-surface;
+  border-color: @dark-accent;
+  box-shadow: 0 0 0 3px alpha(@dark-accent, 0.15);
+}
+
+.dark-mode .network-panel {
+  background: @dark-surface;
+  border: 1px solid alpha(white, 0.04);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.7);
+}
+
+.dark-mode .network-listbox separator {
+  background: alpha(white, 0.05);
+}
+
+.dark-mode .section-title {
+  color: @dark-text-secondary;
+}
+
+.dark-mode .network-row .ssid {
+  color: white;
+}
+
+.dark-mode .network-row .network-subtitle {
+  color: @dark-text-secondary;
+}
+
+.dark-mode .network-row .network-metric {
+  background: alpha(white, 0.06);
+  color: @dark-text-tertiary;
+}
+
+.dark-mode .network-row:hover {
+  background: alpha(white, 0.03);
+}
+
+.dark-mode .network-row:focus-within {
+  background: alpha(@dark-accent, 0.06);
+}
+
+.dark-mode .status-badge {
+  background: alpha(white, 0.06);
+  color: @dark-text-secondary;
+}
+
+.dark-mode .signal-icon {
+  opacity: 0.85;
+}
+
+.dark-mode .portal-banner {
+  background: rgba(234, 179, 8, 0.1);
+  border: 1px solid rgba(234, 179, 8, 0.18);
+  color: #fbbf24;
+}
+
+.dark-mode .hero-network {
+  background: linear-gradient(135deg, #1e40af, #1e3a8a);
+  border: 1px solid alpha(@dark-accent, 0.2);
+  box-shadow: 0 8px 20px -4px rgba(30, 64, 175, 0.4);
+}
+
+.dark-mode .hero-network:hover {
+  background: linear-gradient(135deg, #1d4ed8, #1e3a8a);
+  box-shadow: 0 12px 24px -4px rgba(30, 64, 175, 0.5);
+}
+
+.dark-mode .hero-network .network-metric {
+  background: alpha(white, 0.12);
+  color: #f3f4f6;
+}
+
+.dark-mode .hero-network .status-badge {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  border: 1px solid rgba(52, 211, 153, 0.3);
+}
+
+.dark-mode .dialog-headerbar {
+  border-bottom: 1px solid alpha(white, 0.05);
+}
+
+.dark-mode .dialog-field-label {
+  color: @dark-text-secondary;
+}
+
+.dark-mode .dialog-window entry,
+.dark-mode .dialog-window passwordentry {
+  background: @dark-input;
+  border: 1px solid alpha(white, 0.08);
+  color: #f9fafb;
+}
+
+.dark-mode .dialog-window entry:focus-within {
+  border-color: @dark-accent;
+  box-shadow: 0 0 0 3px alpha(@dark-accent, 0.15);
+}
+
+.dark-mode .dialog-window button.dialog-cancel {
+  color: @dark-text-secondary;
+  border: 1px solid alpha(white, 0.08);
+}
+
+.dark-mode .dialog-window button.dialog-cancel:hover {
+  background: alpha(white, 0.04);
+  border-color: alpha(white, 0.15);
+}
+
+.dark-mode .dialog-window button.suggested-action {
+  background: @dark-accent;
+  color: @dark-accent-text;
+}
+
+.dark-mode .dialog-window button.suggested-action:hover {
+  background: @dark-accent-hover;
+}
+
+.dark-mode .dialog-window button.destructive-action {
+  background: @dark-danger;
+}
+
+.dark-mode .dialog-window button.destructive-action:hover {
+  background: @dark-danger-hover;
+}
+
+.dark-mode .dialog-window button.suggested-action:disabled {
+  background: alpha(@dark-accent, 0.3);
+  color: alpha(@dark-accent-text, 0.5);
+}
+
+.dark-mode .dialog-header-title,
+.dark-mode .dialog-network-name {
+  color: white;
+}
+
+.dark-mode .dialog-network-meta {
+  color: @dark-text-secondary;
+}
+
+.dark-mode .dialog-close {
+  color: @dark-muted;
+}
+
+.dark-mode .dialog-close:hover {
+  background: alpha(white, 0.08);
+  color: white;
+}
+
+.dark-mode .app-title {
+  color: @dark-text;
+}
+
+.dark-mode headerbar {
+  background: @dark-surface-alt;
+  border-bottom: 1px solid alpha(white, 0.05);
+}
+
+popover.dark-mode contents {
+  background: @dark-surface;
+}
+
+popover.dark-mode,
+.popover.dark-mode {
+  background: @dark-surface;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.7);
+}
+
+popover.dark-mode arrow,
+.popover.dark-mode arrow {
+  background: @dark-surface;
+}
+
+popover.dark-mode scrolledwindow,
+.popover.dark-mode scrolledwindow,
+popover.dark-mode .background,
+.popover.dark-mode .background {
+  background: @dark-surface;
+}
+
+popover.dark-mode .popover-content,
+.popover.dark-mode .popover-content {
+  background: @dark-surface;
+}
+
+popover.dark-mode .popover-label {
+  color: @dark-text;
+}
+
+popover.dark-mode switch {
+  background-color: @dark-switch-bg;
+}
+
+popover.dark-mode switch:checked {
+  background-color: @dark-accent;
+}
+
+popover.dark-mode checkbutton {
+  color: @dark-text;
+}
+
+popover.dark-mode checkbutton:hover {
+  background: alpha(white, 0.05);
+  border-radius: 6px;
+}
+
+popover.dark-mode button {
+  background: alpha(white, 0.06);
+  color: @dark-text;
+  border: none;
+}
+
+popover.dark-mode button:hover {
+  background: alpha(white, 0.1);
+}
+
+.dark-mode .dim-label {
+  color: @dark-text-secondary;
+}
+
+.dark-mode headerbar button {
+  color: @dark-text-secondary;
+}
+
+.dark-mode headerbar button:hover {
+  color: @dark-text;
+  background: alpha(white, 0.06);
+}
+
+.dark-mode .state-title {
+  color: @dark-text;
+}
+
+.dark-mode .detail-key {
+  color: @dark-text-secondary;
+}
+
+.dark-mode .detail-value {
+  color: @dark-text-tertiary;
+}
+
+.dark-mode .dialog-error {
+  background: alpha(@dark-danger, 0.1);
+  border: 1px solid alpha(@dark-danger, 0.18);
+  color: #fca5a5;
 }

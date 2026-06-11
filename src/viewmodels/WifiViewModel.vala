@@ -62,7 +62,6 @@ public class WifiViewModel : GLib.Object {
         items = new GLib.ListStore (typeof (WifiListItem));
 
         service.changed.connect (() => schedule_rebuild ());
-        service.changed.connect (() => update_connectivity_state ());
         service.scan_started.connect (() => {
             scanning = true;
             notify_property ("scanning");
@@ -477,7 +476,7 @@ public class WifiViewModel : GLib.Object {
         if (search_text.length == 0) {
             return true;
         }
-        return network.ssid.down ().contains (search_text);
+        return network.lower_ssid.contains (search_text);
     }
 
     private void append_section (string title, GLib.GenericArray<WifiNetwork> networks) {

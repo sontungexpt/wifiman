@@ -42,11 +42,11 @@ src/
   utils/WifiUtils.vala        SSID, security, and icon helper functions
 data/
   resources.gresource.xml     Resource manifest for CSS and UI assets
-style.css                    Theme-aware GTK CSS
+style.css                    Theme-aware GTK CSS with @define-color variables
 docs/
   architecture.md            This file
   changelog/
-    2026-06-11.md            Session changes by date
+    2026-06-11.md            Session changes
 ```
 
 ## Responsibilities
@@ -67,7 +67,16 @@ docs/
   filtering down to zero matches
 - Manages a separate connected-network hero container, search-empty state, and
   the listbox for available scan-result rows
-- Builds the connect/action dialogs with a flattened, card-free layout
+- Builds connect/action dialogs with a flattened, card-free layout:
+  - Titlebar: `Gtk.HeaderBar` with `show_title_buttons = false`, centered title
+    via `title_widget`, close via `pack_end()` with a `Gtk.Image` +
+    `Gtk.GestureClick` (no `Gtk.Button`)
+  - Close button styled via `.dialog-close`: 46×46px hit-box,
+    `border-radius: 0 12px 0 0`, zero padding/margin/border, hover background
+  - HeaderBar's `.end` box padded to zero via
+    `headerbar.dialog-headerbar .end { padding:0; margin:0; min-width:0 }`
+- Search uses `Gtk.Editable.changed` signal (not `search_changed`) to fire on
+  every keystroke, then debounced at 120ms via `queue_search_update()`
 - Renders network rows from the viewmodel
 
 ### `WifiViewModel`
@@ -115,6 +124,7 @@ docs/
 ### `WifiNetwork`
 
 - Holds SSID, BSSID, signal strength, security, band, and state
+- Pre-computes `lower_ssid` on SSID set for O(1) case-insensitive search matching
 - Exposes computed properties for:
   - `subtitle`
   - `signal_icon_name`
@@ -351,7 +361,7 @@ The results page is built from native GTK4 widgets:
 - `GtkHeaderBar` in the window titlebar
 - `GtkStack` for loading, empty, error, and results states
 - centered content shell with fixed width
-- `GtkSearchEntry` inside the content area
+- `Gtk.SearchEntry` inside the content area (uses `Gtk.Editable.changed` signal)
 - a status strip under search showing scan freshness and connectivity state
 - a portal banner that appears when NetworkManager reports captive portal state
 - hero container for the connected network
@@ -364,6 +374,15 @@ The results page is built from native GTK4 widgets:
 The app uses a single CSS resource loaded from `style.css` through GTK
 resources. The stylesheet is theme-aware and keeps the shell neutral while
 reserving strong accent styling for the connected hero row.
+
+Dark mode colors are defined as `@define-color` variables at the top of the
+file (`@dark-bg`, `@dark-surface`, `@dark-text`, `@dark-accent`, etc.) and
+referenced throughout the dark-mode section. All `rgba()` calls in dark mode
+use `alpha(@variable, ...)` instead.
+
+Popover styles are split into a base section (applies to both light and dark
+modes: `border-radius: 12px`, `border: none`, `padding: 0`, `box-shadow`) and
+a dark-mode-only override section (background colors only).
 
 Key style classes:
 
@@ -382,7 +401,13 @@ Key style classes:
 - `.details-grid`
 - `.dialog-window`
 - `.dialog-headerbar`
+- `.dialog-close` — 46×46px hit-box, `border-radius: 0 12px 0 0`,
+  zero padding/margin/border, hover background
 - `.dialog-body`
 - `.dialog-field-label`
 - `.dialog-cancel`
 - `.dialog-error`
+
+Dark mode uses `.dark-mode` class on windows and popovers (not `@media`
+queries), toggled at runtime via
+`gtk_application_prefer_dark_theme` + CSS class sync.
