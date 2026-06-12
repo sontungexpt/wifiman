@@ -37,20 +37,20 @@ src/
   viewmodels/WifiViewModel.vala
                               UI-facing network state, sorting, filtering,
                               grouping, and action forwarding
-   widgets/WifiNetworkRow.vala
-                                Reusable GTK row used for network rendering
-
-   utils/WifiUtils.vala        SSID, security, and icon helper functions
-   utils/Logger.vala           Async file logging with GLib integration
+  widgets/SignalIcon.vala     Cairo-drawn Wi-Fi signal arcs (icon-theme independent)
+  widgets/WifiNetworkRow.vala
+                              Reusable GTK row used for network rendering
+  utils/WifiUtils.vala        SSID, security, and channel helper functions
+  utils/Logger.vala           Async file logging with GLib integration
                                 and log rotation
 data/
   resources.gresource.xml     Resource manifest for CSS and UI assets
 style.css                    Theme-aware GTK CSS with @define-color variables
 docs/
   architecture.md            This file
-   changelog/
-     2026-06-11.md            Session changes
-     2026-06-12.md            Async logger, SignalIcon revert, bitrate fix
+  changelog/
+      2026-06-11.md            Session changes
+      2026-06-12.md            Async logger, Cairo SignalIcon, bitrate fix, binding
 ```
 
 ## Responsibilities
@@ -145,21 +145,45 @@ docs/
   - IP / gateway / DNS
   - warning and health text
 
+### `SignalIcon`
+
+- Custom `Gtk.DrawingArea` that draws Wi-Fi signal arcs with Cairo, bypassing
+  the icon theme entirely (fixes themes like Papirus-Dark where all
+  `network-wireless-signal-*-symbolic` names resolve to the same fallback icon)
+- Exposes an `int strength` property (0–100) that triggers `queue_draw()`
+  on change via `notify["strength"]` binding
+- Draws 4 concentric arcs (radii 4, 8, 12, 16) sweeping 225°→315° — the
+  classic Wi-Fi fan shape, respecting CSS color and opacity via
+  `Gtk.StyleContext.get_color()`
+- Arc center (`cy = height - 3`) is shifted up 3px from the widget bottom
+  so the visual center of the arcs aligns with the widget center, matching
+  the badge text baseline
+- Supports `.signal-icon` CSS class for theme integration and hero-network
+  color overrides
+
 ### `WifiNetworkRow`
 
-- Renders one network row with a themed `Gtk.Image` signal icon
-- Handles header rows and network rows
+- Renders one network row with a `SignalIcon` widget for the signal indicator
+- Only handles network items (the HEADER branch was removed — unreachable)
 - Updates live when network properties change, including auto-connect status
 - Adds the hero styling for the connected network
 - Exposes a right-click action path for row menus and details
 - Renders compact metric pills for signal and speed
-- `signal_icon.icon_name` is updated via `WifiUtils.signal_strength_to_icon()`
-  whenever the network's `strength` property changes — no widget recreation
+- `network.strength` is bound to `signal_icon.strength` via `GLib.Binding`
+  with `SYNC_CREATE` (no transform needed) — handles initial sync and
+  subsequent property changes automatically. The old `update_signal()` method
+  that manually set the strength before binding creation was removed as
+  redundant — `SYNC_CREATE` already copies the initial value.
+- Signal handlers for `security`, `frequency`, and `access-point-count`
+  are not connected — these properties are set once during AP discovery
+  and never change, making their handlers dead code.
 - Stores `network` as `unowned` to break the reference cycle: signal closures
   on the WifiNetwork keep the row alive, but the row no longer keeps the
   network alive. When `rebuild()` removes a network from `networks_by_ssid`,
   the network is finalized, signal handlers are disconnected, and the row
   is finalized — no orphaned objects leak across scan cycles.
+- All signal handler IDs are properly stored and disconnected in
+  `disconnect_network()` — no handler leaks across `set_item()` calls.
 
 ### `Logger`
 
@@ -192,9 +216,10 @@ docs/
 
 - Converts SSID bytes to safe display strings
 - Maps NM security flags to app-level security values
-- Maps signal strength (0–100) to GNOME symbolic icon names
-  (`network-wireless-signal-*-symbolic`)
 - Formats bitrate, signal dBm, scan age, and connection health labels
+- Dead functions removed: `signal_quality_label`, `join_nonempty`,
+  `connectivity_to_style`, `active_connection_reason_to_label`,
+  `device_state_reason_to_label`, `ssid_equal` (none called anywhere)
 
 ## Features
 

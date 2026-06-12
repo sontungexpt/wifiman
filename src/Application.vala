@@ -1,5 +1,4 @@
 using Gtk;
-using GLib;
 
 /**
  * Main application class for the Wi-Fi manager.

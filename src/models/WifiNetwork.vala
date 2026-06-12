@@ -1,4 +1,3 @@
-using GLib;
 using NM;
 
 /**
@@ -450,13 +449,6 @@ public class WifiNetwork : GLib.Object {
             append_summary_part (builder, warning_text);
             return builder.str;
         }
-    }
-
-    /**
-     * Symbolic icon name for the current signal strength.
-     */
-    public string signal_icon_name {
-        owned get { return WifiUtils.signal_strength_to_icon (strength); }
     }
 
     /**

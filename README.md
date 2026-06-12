@@ -53,3 +53,13 @@ Without the flag, only GLib journald/messages are active (visible via
 File writes are asynchronous — a dedicated writer thread consumes entries
 from a lock-free queue. Logging calls never block on disk I/O. The writer
 thread drains batches at 100ms intervals and performs rotation internally.
+
+## Signal icon
+
+The Wi-Fi signal indicator uses a custom `Gtk.DrawingArea` (`SignalIcon`)
+that draws 4 concentric Cairo arcs — no dependency on icon theme icons.
+Works with any theme (including Papirus-Dark where `network-wireless-signal-*-symbolic`
+icons all resolve to the same fallback).
+
+`network.strength` is bound to `signal_icon.strength` via `GLib.Binding`
+with `SYNC_CREATE` — no manual signal handler needed.

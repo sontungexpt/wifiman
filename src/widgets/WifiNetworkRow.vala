@@ -1,5 +1,4 @@
 using Gtk;
-using GLib;
 
 /**
  * A row widget for displaying a Wi-Fi network in a list.
@@ -18,9 +17,8 @@ public class WifiNetworkRow : Gtk.Box {
      */
     public signal void request_actions (WifiNetwork network);
 
-    private Gtk.Label section_label;
     private Gtk.Box row_box;
-    private Gtk.Image signal_icon;
+    private SignalIcon signal_icon;
     private Gtk.Label ssid_label;
     private Gtk.Label subtitle_label;
     private Gtk.Box metrics_box;
@@ -30,13 +28,19 @@ public class WifiNetworkRow : Gtk.Box {
     private Gtk.Label security_status_label;
 
     private unowned WifiNetwork? network;
-    private ulong strength_id = 0;
+    private GLib.Binding? signal_binding = null;
     private ulong connected_id = 0;
     private ulong saved_id = 0;
     private ulong auto_connecting_id = 0;
     private ulong connecting_text_id = 0;
-    private ulong security_id = 0;
-    private ulong frequency_id = 0;
+    private ulong bitrate_id = 0;
+    private ulong scan_age_id = 0;
+    private ulong signal_dbm_id = 0;
+    private ulong ip_address_id = 0;
+    private ulong gateway_id = 0;
+    private ulong dns_id = 0;
+    private ulong warning_id = 0;
+    private ulong health_id = 0;
 
     /**
      * The currently displayed network, or null if the row is empty.
@@ -56,12 +60,6 @@ public class WifiNetworkRow : Gtk.Box {
     public WifiNetworkRow () {
         Object (orientation: Gtk.Orientation.VERTICAL, spacing: 0);
         add_css_class ("wifi-list-item");
-
-        section_label = new Gtk.Label ("");
-        section_label.xalign = 0.0f;
-        section_label.visible = false;
-        section_label.add_css_class ("section-header");
-        append (section_label);
 
         row_box = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 12);
         row_box.hexpand = true;
@@ -108,13 +106,9 @@ public class WifiNetworkRow : Gtk.Box {
         security_status_label.valign = Gtk.Align.CENTER;
         badge_box.append (security_status_label);
 
-        signal_icon = new Gtk.Image.from_icon_name ("network-wireless-signal-none-symbolic");
-        signal_icon.pixel_size = 24;
+        signal_icon = new SignalIcon ();
         signal_icon.valign = Gtk.Align.CENTER;
         signal_icon.add_css_class ("signal-icon");
-        signal_icon.margin_start = 0;
-        signal_icon.margin_top = 0;
-        signal_icon.margin_bottom = 0;
         status_box.append (signal_icon);
 
         subtitle_label = new Gtk.Label ("");
@@ -177,9 +171,8 @@ public class WifiNetworkRow : Gtk.Box {
      * Populate the row with data from a WifiListItem and bind
      * property notifications.
      *
-     * For HEADER items, only the section label is shown.  For
-     * NETWORK items, all fields are populated and property change
-     * handlers are attached to the WifiNetwork.
+     * All fields are populated and property change handlers are
+     * attached to the WifiNetwork.
      *
      * @param item  The WifiListItem to render.
      */
@@ -188,19 +181,8 @@ public class WifiNetworkRow : Gtk.Box {
         disconnect_network ();
         set_hero (false);
 
-        if (item.kind == WifiListItemKind.HEADER) {
-            section_label.label = item.title;
-            section_label.visible = true;
-            row_box.visible = false;
-            add_css_class ("header-item");
-            remove_css_class ("network-item");
-            return;
-        }
-
         network = item.network;
-        section_label.visible = false;
         row_box.visible = true;
-        remove_css_class ("header-item");
         add_css_class ("network-item");
 
         if (network == null) {
@@ -208,22 +190,20 @@ public class WifiNetworkRow : Gtk.Box {
         }
 
         update_all ();
-        strength_id = network.notify["strength"].connect (() => update_signal ());
+        signal_binding = network.bind_property ("strength", signal_icon, "strength",
+            BindingFlags.SYNC_CREATE, null, null);
         connected_id = network.notify["is-connected"].connect (() => update_status ());
         saved_id = network.notify["is-saved"].connect (() => update_status ());
         auto_connecting_id = network.notify["auto-connecting"].connect (() => update_status ());
         connecting_text_id = network.notify["connecting-status-text"].connect (() => update_status ());
-        security_id = network.notify["security"].connect (() => update_security ());
-        frequency_id = network.notify["frequency"].connect (() => update_security ());
-        network.notify["access-point-count"].connect (() => update_security ());
-        network.notify["bitrate-mbps"].connect (() => update_metrics ());
-        network.notify["scan-age-text"].connect (() => update_metrics ());
-        network.notify["signal-dbm-text"].connect (() => update_metrics ());
-        network.notify["ip-address"].connect (() => update_metrics ());
-        network.notify["gateway"].connect (() => update_metrics ());
-        network.notify["dns-summary"].connect (() => update_metrics ());
-        network.notify["warning-text"].connect (() => update_metrics ());
-        network.notify["health-text"].connect (() => update_metrics ());
+        bitrate_id = network.notify["bitrate-mbps"].connect (() => update_metrics ());
+        scan_age_id = network.notify["scan-age-text"].connect (() => update_metrics ());
+        signal_dbm_id = network.notify["signal-dbm-text"].connect (() => update_metrics ());
+        ip_address_id = network.notify["ip-address"].connect (() => update_metrics ());
+        gateway_id = network.notify["gateway"].connect (() => update_metrics ());
+        dns_id = network.notify["dns-summary"].connect (() => update_metrics ());
+        warning_id = network.notify["warning-text"].connect (() => update_metrics ());
+        health_id = network.notify["health-text"].connect (() => update_metrics ());
     }
 
     /**
@@ -231,7 +211,6 @@ public class WifiNetworkRow : Gtk.Box {
      */
     public void clear () {
         disconnect_network ();
-        section_label.visible = false;
         row_box.visible = false;
     }
 
@@ -244,21 +223,35 @@ public class WifiNetworkRow : Gtk.Box {
             return;
         }
 
-        if (strength_id != 0) SignalHandler.disconnect (network, strength_id);
+        if (signal_binding != null) {
+            signal_binding.unbind ();
+            signal_binding = null;
+        }
         if (connected_id != 0) SignalHandler.disconnect (network, connected_id);
         if (saved_id != 0) SignalHandler.disconnect (network, saved_id);
         if (auto_connecting_id != 0) SignalHandler.disconnect (network, auto_connecting_id);
         if (connecting_text_id != 0) SignalHandler.disconnect (network, connecting_text_id);
-        if (security_id != 0) SignalHandler.disconnect (network, security_id);
-        if (frequency_id != 0) SignalHandler.disconnect (network, frequency_id);
+        if (bitrate_id != 0) SignalHandler.disconnect (network, bitrate_id);
+        if (scan_age_id != 0) SignalHandler.disconnect (network, scan_age_id);
+        if (signal_dbm_id != 0) SignalHandler.disconnect (network, signal_dbm_id);
+        if (ip_address_id != 0) SignalHandler.disconnect (network, ip_address_id);
+        if (gateway_id != 0) SignalHandler.disconnect (network, gateway_id);
+        if (dns_id != 0) SignalHandler.disconnect (network, dns_id);
+        if (warning_id != 0) SignalHandler.disconnect (network, warning_id);
+        if (health_id != 0) SignalHandler.disconnect (network, health_id);
 
-        strength_id = 0;
         connected_id = 0;
         saved_id = 0;
         auto_connecting_id = 0;
         connecting_text_id = 0;
-        security_id = 0;
-        frequency_id = 0;
+        bitrate_id = 0;
+        scan_age_id = 0;
+        signal_dbm_id = 0;
+        ip_address_id = 0;
+        gateway_id = 0;
+        dns_id = 0;
+        warning_id = 0;
+        health_id = 0;
         network = null;
     }
 
@@ -267,17 +260,9 @@ public class WifiNetworkRow : Gtk.Box {
      */
     private void update_all () {
         ssid_label.label = network.ssid;
-        update_signal ();
         update_status ();
         update_security ();
         update_metrics ();
-    }
-
-    /**
-     * Update the signal strength icon.
-     */
-    private void update_signal () {
-        signal_icon.set_from_icon_name (network.signal_icon_name);
     }
 
     /**
@@ -322,8 +307,6 @@ public class WifiNetworkRow : Gtk.Box {
         security_status_label.remove_css_class ("wpa3");
         security_status_label.remove_css_class ("enterprise");
         security_status_label.add_css_class (network.security_badge_style);
-        metrics_box.visible = network.metrics_text.length > 0;
-        update_metrics ();
     }
 
     /**

@@ -1,4 +1,3 @@
-using GLib;
 using NM;
 
 /**
@@ -26,16 +25,6 @@ public class WifiUtils : GLib.Object {
      */
     public static string signal_dbm_label (int strength) {
         return "%d dBm".printf (estimate_signal_dbm (strength));
-    }
-
-    /**
-     * Format signal strength as a percentage string.
-     *
-     * @param strength  Signal strength percentage (0–100).
-     * @return A string like "75%".
-     */
-    public static string signal_quality_label (int strength) {
-        return "%d%%".printf (strength.clamp (0, 100));
     }
 
     /**
@@ -92,33 +81,6 @@ public class WifiUtils : GLib.Object {
     }
 
     /**
-     * Join an array of strings with a separator, skipping null
-     * and empty values.
-     *
-     * @param values     The array of strings to join.
-     * @param separator  The separator string.
-     * @return The joined string.
-     */
-    public static string join_nonempty (string[] values, string separator) {
-        var builder = new GLib.StringBuilder ();
-        bool first = true;
-
-        foreach (var value in values) {
-            if (value == null || value.length == 0) {
-                continue;
-            }
-
-            if (!first) {
-                builder.append (separator);
-            }
-            builder.append (value);
-            first = false;
-        }
-
-        return builder.str;
-    }
-
-    /**
      * Convert a connectivity state to a human-readable label.
      *
      * @param connectivity  The NM.ConnectivityState value.
@@ -136,77 +98,6 @@ public class WifiUtils : GLib.Object {
                 return "No network connection";
             default:
                 return "Connectivity unknown";
-        }
-    }
-
-    /**
-     * Convert a connectivity state to a CSS style class.
-     *
-     * @param connectivity  The NM.ConnectivityState value.
-     * @return "connected", "warning", "connecting", "failed", or "saved".
-     */
-    public static string connectivity_to_style (NM.ConnectivityState connectivity) {
-        switch (connectivity) {
-            case NM.ConnectivityState.FULL:
-                return "connected";
-            case NM.ConnectivityState.PORTAL:
-                return "warning";
-            case NM.ConnectivityState.LIMITED:
-                return "connecting";
-            case NM.ConnectivityState.NONE:
-                return "failed";
-            default:
-                return "saved";
-        }
-    }
-
-    /**
-     * Convert an active connection state reason to a human-readable
-     * description.
-     *
-     * @param reason  The NM.ActiveConnectionStateReason value.
-     * @return "Disconnected by user", "Authentication failed", etc.
-     */
-    public static string active_connection_reason_to_label (NM.ActiveConnectionStateReason reason) {
-        switch (reason) {
-            case NM.ActiveConnectionStateReason.USER_DISCONNECTED:
-                return "Disconnected by user";
-            case NM.ActiveConnectionStateReason.DEVICE_DISCONNECTED:
-                return "Device disconnected";
-            case NM.ActiveConnectionStateReason.IP_CONFIG_INVALID:
-                return "IP configuration invalid";
-            case NM.ActiveConnectionStateReason.NO_SECRETS:
-                return "Missing credentials";
-            case NM.ActiveConnectionStateReason.LOGIN_FAILED:
-                return "Authentication failed";
-            default:
-                return "Connection failed";
-        }
-    }
-
-    /**
-     * Convert a device state reason to a human-readable description.
-     *
-     * @param reason  The NM.DeviceStateReason value.
-     * @return "Missing credentials", "Authentication failed", etc.
-     */
-    public static string device_state_reason_to_label (NM.DeviceStateReason reason) {
-        switch (reason) {
-            case NM.DeviceStateReason.NO_SECRETS:
-                return "Missing credentials";
-            case NM.DeviceStateReason.SUPPLICANT_DISCONNECT:
-            case NM.DeviceStateReason.SUPPLICANT_FAILED:
-            case NM.DeviceStateReason.SUPPLICANT_TIMEOUT:
-                return "Authentication failed";
-            case NM.DeviceStateReason.DHCP_START_FAILED:
-            case NM.DeviceStateReason.DHCP_ERROR:
-            case NM.DeviceStateReason.DHCP_FAILED:
-                return "DHCP timeout";
-            case NM.DeviceStateReason.IP_CONFIG_UNAVAILABLE:
-            case NM.DeviceStateReason.IP_CONFIG_EXPIRED:
-                return "IP configuration unavailable";
-            default:
-                return "Connection failed";
         }
     }
 
@@ -233,20 +124,6 @@ public class WifiUtils : GLib.Object {
             return "Open network";
         }
         return "Stable";
-    }
-
-    /**
-     * Map signal strength (0–100) to a symbolic icon name.
-     *
-     * @param strength  Signal strength percentage (0–100).
-     * @return Icon name like "network-wireless-signal-excellent-symbolic".
-     */
-    public static string signal_strength_to_icon (int strength) {
-        if (strength >= 80) return "network-wireless-signal-excellent-symbolic";
-        if (strength >= 60) return "network-wireless-signal-good-symbolic";
-        if (strength >= 40) return "network-wireless-signal-ok-symbolic";
-        if (strength >= 20) return "network-wireless-signal-weak-symbolic";
-        return "network-wireless-signal-none-symbolic";
     }
 
     /**
@@ -327,19 +204,5 @@ public class WifiUtils : GLib.Object {
             return WifiSecurity.WEP;
         }
         return WifiSecurity.OPEN;
-    }
-
-    /**
-     * Compare two SSID byte arrays for equality.
-     *
-     * @param a  First SSID bytes.
-     * @param b  Second SSID bytes.
-     * @return true if both are null or both have identical content.
-     */
-    public static bool ssid_equal (GLib.Bytes? a, GLib.Bytes? b) {
-        if (a == null || b == null) {
-            return a == b;
-        }
-        return a.compare (b) == 0;
     }
 }

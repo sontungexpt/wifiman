@@ -1,4 +1,3 @@
-using GLib;
 using NM;
 
 /**
@@ -811,8 +810,11 @@ public class WifiViewModel : GLib.Object {
     }
 
     /**
-     * Sort networks by signal strength descending, then by SSID
-     * ascending.
+     * Sort networks by weighted score descending, then stronger
+     * signal, then alphabetical SSID.
+     *
+     * Score = band (6GHz=300, 5GHz=200, 2.4GHz=100) + signal
+     * (dBm+100) + saved (+50) + connected/stability (+20) + WPA3 (+10).
      *
      * @param networks  The array to sort in-place.
      */
@@ -826,6 +828,23 @@ public class WifiViewModel : GLib.Object {
             }
             if (b == null) {
                 return -1;
+            }
+
+            int band_a = a.frequency >= 5925 ? 300 : a.frequency >= 4900 ? 200 : a.frequency >= 2400 ? 100 : 0;
+            int band_b = b.frequency >= 5925 ? 300 : b.frequency >= 4900 ? 200 : b.frequency >= 2400 ? 100 : 0;
+            int signal_a = WifiUtils.estimate_signal_dbm (a.strength) + 100;
+            int signal_b = WifiUtils.estimate_signal_dbm (b.strength) + 100;
+            int saved_a = a.is_saved ? 50 : 0;
+            int saved_b = b.is_saved ? 50 : 0;
+            int stability_a = a.is_connected ? 20 : 0;
+            int stability_b = b.is_connected ? 20 : 0;
+            int security_a = a.security == WifiSecurity.WPA3 ? 10 : 0;
+            int security_b = b.security == WifiSecurity.WPA3 ? 10 : 0;
+
+            int sa = band_a + signal_a + saved_a + stability_a + security_a;
+            int sb = band_b + signal_b + saved_b + stability_b + security_b;
+            if (sa != sb) {
+                return sb - sa;
             }
 
             if (a.strength != b.strength) {

@@ -1,5 +1,4 @@
 using Gtk;
-using GLib;
 
 /**
  * Main application window for the Wi-Fi manager.
@@ -756,6 +755,7 @@ public class MainWindow : Gtk.ApplicationWindow {
 
         var password_entry = new Gtk.PasswordEntry ();
         password_entry.placeholder_text = "Enter password";
+        password_entry.show_peek_icon = true;
         password_entry.add_css_class ("dialog-input");
         body.append (build_dialog_field ("Password", password_entry));
 
@@ -787,7 +787,8 @@ public class MainWindow : Gtk.ApplicationWindow {
         body.append (actions);
 
         cancel.clicked.connect (() => dialog.close ());
-        connect.clicked.connect (() => {
+
+        void do_connect () {
             connect.sensitive = false;
             error_box.visible = false;
             var username = username_entry != null ? username_entry.text : null;
@@ -801,7 +802,10 @@ public class MainWindow : Gtk.ApplicationWindow {
                     connect.sensitive = true;
                 }
             });
-        });
+        }
+
+        connect.clicked.connect (do_connect);
+        password_entry.activate.connect (do_connect);
 
         dialog.present ();
         password_entry.grab_focus ();
