@@ -150,7 +150,10 @@ public class MainWindow : Gtk.ApplicationWindow {
 
         try {
             var css = new Gtk.CssProvider ();
-            css.load_from_string (".dark-mode { background: #111827; border: none; outline: none; padding: 0; }");
+            css.load_from_string (
+                ".dark-mode { background: #111827; border: none; outline: none; padding: 0; } " +
+                "popover:not(.dark-mode) { background: #ffffff; border: none; outline: none; padding: 0; }"
+            );
             menu_popover.get_style_context().add_provider (css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
         } catch (GLib.Error e) {
             Logger.warn ("MainWindow", "Failed to load popover CSS override: %s", e.message);

@@ -15,31 +15,50 @@
 @define-color dark-danger #dc2626;
 @define-color dark-danger-hover #ef4444;
 
+/* ── Light mode color tokens ──────────────────────────────────── */
+
+@define-color light-text-primary #111827;
+@define-color light-text-secondary #6b7280;
+@define-color light-text-tertiary #4b5563;
+@define-color light-text-muted #78848f;
+@define-color light-bg #f6f6f7;
+@define-color light-bg-white #ffffff;
+@define-color light-bg-dialog #f5f5f7;
+@define-color light-input-bg #ffffff;
+@define-color light-accent #3584e4;
+@define-color light-warning #d97706;
+@define-color light-success #059669;
+@define-color light-error #dc2626;
+@define-color light-error-hover #ef4444;
+@define-color popover_bg_color @light-bg-white;
+
 /* ── Base layout ─────────────────────────────────────────────── */
 
 window {
-    background: #f6f6f7;
+    background: @light-bg;
+    color: @light-text-primary;
 }
 
 headerbar {
-    background: @headerbar_bg_color;
+    background: #f0f0f1;
     padding: 8px 12px;
-    border-bottom: 1px solid alpha(@window_fg_color, 0.04);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .app-title {
     font-size: 15px;
     font-weight: 700;
     letter-spacing: 0.02em;
+    color: @light-text-primary;
 }
 
 scrolledwindow,
 stack {
-    background: @window_bg_color;
+    background: @light-bg;
 }
 
 .content-scroll {
-    background: #f6f6f7;
+    background: @light-bg;
 }
 
 .content-shell {
@@ -54,23 +73,26 @@ stack {
 .portal-banner {
     padding: 12px 14px;
     border-radius: 14px;
-    background: alpha(@warning_color, 0.1);
-    border: 1px solid alpha(@warning_color, 0.18);
+    background: alpha(@light-warning, 0.1);
+    border: 1px solid alpha(@light-warning, 0.18);
 }
 
 .premium-search {
     min-height: 42px;
     padding: 10px 16px;
     border-radius: 12px;
-    background: #ffffff;
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+    background: @light-bg-white;
+    color: @light-text-primary;
+    border: 1px solid rgba(0, 0, 0, 0.14);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
     transition: all 0.2s ease-in-out;
 }
 
 .premium-search:focus-within {
-    background: #ffffff;
-    border-color: alpha(@accent_bg_color, 0.26);
+    background: @light-bg-white;
+    color: @light-text-primary;
+    border-color: @light-accent;
+    box-shadow: 0 0 0 3px alpha(@light-accent, 0.15), 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .hero-container {
@@ -81,7 +103,7 @@ stack {
 }
 
 .network-panel {
-    background: #ffffff;
+    background: @light-bg-white;
     border: 1px solid rgba(0, 0, 0, 0.08);
     border-radius: 16px;
     padding: 0;
@@ -92,15 +114,15 @@ stack {
     background: transparent;
 }
 
-.network-listbox row,
-.network-listbox separator {
+.network-listbox row {
     background: transparent;
 }
 
 .network-listbox separator {
     min-height: 1px;
     margin: 0 16px;
-    background: alpha(@window_fg_color, 0.05);
+    border: none;
+    background: rgba(0, 0, 0, 0.10);
 }
 
 .section-row {
@@ -116,7 +138,7 @@ stack {
     font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;
-    opacity: 0.72;
+    color: @light-text-secondary;
 }
 
 .wifi-list-item {
@@ -132,12 +154,12 @@ stack {
 }
 
 .network-row:hover {
-    background: alpha(@window_fg_color, 0.04);
+    background: rgba(0, 0, 0, 0.04);
     transform: translateX(2px);
 }
 
 .network-row:focus-within {
-    background: alpha(@accent_bg_color, 0.08);
+    background: alpha(@light-accent, 0.08);
 }
 
 .ssid {
@@ -145,11 +167,12 @@ stack {
     font-weight: 600;
     letter-spacing: 0.01em;
     font-family: "Noto Sans", "DejaVu Sans", "FreeSans", sans-serif;
+    color: @light-text-primary;
 }
 
 .network-subtitle {
     font-size: 12px;
-    opacity: 0.6;
+    color: @light-text-secondary;
 }
 
 .network-metrics {
@@ -160,44 +183,44 @@ stack {
     margin: 0;
     padding: 3px 9px;
     border-radius: 999px;
-    background: alpha(@window_fg_color, 0.05);
+    background: rgba(0, 0, 0, 0.05);
     font-size: 11px;
     font-weight: 500;
-    color: alpha(@window_fg_color, 0.72);
+    color: @light-text-secondary;
 }
 
 .status-badge {
     margin: 0;
     padding: 4px 10px;
     border-radius: 999px;
-    background: alpha(@window_fg_color, 0.05);
+    background: rgba(0, 0, 0, 0.05);
     font-size: 11px;
     font-weight: 500;
-    color: alpha(@window_fg_color, 0.6);
+    color: @light-text-secondary;
 }
 
 .status-badge.warning,
 .network-metric.warning {
-    background: alpha(@warning_color, 0.1);
-    color: alpha(@warning_color, 0.88);
+    background: alpha(@light-warning, 0.1);
+    color: alpha(@light-warning, 0.88);
 }
 
 .status-badge.connected,
 .network-metric.connected {
-    background: alpha(@accent_bg_color, 0.12);
-    color: alpha(@accent_bg_color, 0.95);
+    background: alpha(@light-accent, 0.12);
+    color: alpha(@light-accent, 0.95);
 }
 
 .status-badge.connecting,
 .network-metric.connecting {
-    background: alpha(@success_color, 0.1);
-    color: alpha(@success_color, 0.9);
+    background: alpha(@light-success, 0.1);
+    color: alpha(@light-success, 0.9);
 }
 
 .status-badge.failed,
 .network-metric.failed {
-    background: alpha(@error_color, 0.1);
-    color: alpha(@error_color, 0.9);
+    background: alpha(@light-error, 0.1);
+    color: alpha(@light-error, 0.9);
 }
 
 .signal-icon {
@@ -251,22 +274,23 @@ stack {
 .state-title {
     font-size: 18px;
     font-weight: 700;
+    color: @light-text-primary;
 }
 
 /* ── Dialog Window ───────────────────────────────────────────── */
 
 .dialog-window {
-    background: #f5f5f7;
-    color: #1f2937;
+    background: @light-bg-dialog;
+    color: @light-text-primary;
     box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18);
 }
 
 .dialog-header-title {
-    color: #1f2937;
+    color: @light-text-primary;
 }
 
 .dialog-network-name {
-    color: #111827;
+    color: @light-text-primary;
 }
 
 /* ── Header Bar ─────────────────────────────────────────────── */
@@ -275,6 +299,7 @@ stack {
     min-height: 46px;
     padding: 0;
     border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    background: #ecedee;
 }
 
 headerbar.dialog-headerbar .end {
@@ -298,13 +323,13 @@ headerbar.dialog-headerbar .end {
     background: transparent;
     box-shadow: none;
     outline: none;
-    color: rgba(0, 0, 0, 0.45);
+    color: @light-text-secondary;
     transition: all 0.15s ease;
 }
 
 .dialog-close:hover {
     background: rgba(0, 0, 0, 0.06);
-    color: rgba(0, 0, 0, 0.9);
+    color: @light-text-primary;
 }
 
 headerbar.dialog-headerbar > box.end * {
@@ -332,7 +357,7 @@ headerbar.dialog-headerbar > box.end * {
 
 .dialog-network-meta {
     font-size: 13px;
-    opacity: 0.6;
+    color: @light-text-secondary;
 }
 
 /* ── Input Labels ───────────────────────────────────────────── */
@@ -340,7 +365,7 @@ headerbar.dialog-headerbar > box.end * {
 .dialog-field-label {
     font-size: 12px;
     font-weight: 600;
-    color: rgba(0, 0, 0, 0.65);
+    color: @light-text-tertiary;
 }
 
 /* ── Text Entry / Password Entry ────────────────────────────── */
@@ -349,9 +374,9 @@ headerbar.dialog-headerbar > box.end * {
     min-height: 38px;
     padding: 0 10px;
     border-radius: 8px;
-    background: #ffffff;
+    background: @light-input-bg;
     border: 1px solid rgba(0, 0, 0, 0.08);
-    color: rgba(0, 0, 0, 0.85);
+    color: @light-text-primary;
     font-size: 13px;
     caret-color: #3584e4;
     transition:
@@ -365,32 +390,32 @@ headerbar.dialog-headerbar > box.end * {
 }
 
 passwordentry.dialog-input {
-  padding-right: 4px;
+    padding-right: 4px;
 }
 
 passwordentry button {
-  min-width: 28px;
-  min-height: 28px;
-  padding: 0;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: rgba(0, 0, 0, 0.55);
-  transition: all 0.15s ease;
+    min-width: 28px;
+    min-height: 28px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: @light-text-secondary;
+    transition: all 0.15s ease;
 }
 
 passwordentry button:hover {
-  color: rgba(0, 0, 0, 0.85);
-  background: rgba(0, 0, 0, 0.04);
+    color: @light-text-primary;
+    background: rgba(0, 0, 0, 0.04);
 }
 
 .dark-mode passwordentry button {
-  color: alpha(white, 0.35);
+    color: alpha(white, 0.35);
 }
 
 .dark-mode passwordentry button:hover {
-  color: #f9fafb;
-  background: alpha(white, 0.05);
+    color: #f9fafb;
+    background: alpha(white, 0.05);
 }
 
 /* ── Error Box ──────────────────────────────────────────────── */
@@ -398,15 +423,15 @@ passwordentry button:hover {
 .dialog-error {
     padding: 10px 12px;
     border-radius: 10px;
-    background: alpha(@error_color, 0.06);
-    border: 1px solid alpha(@error_color, 0.14);
-    color: @error_color;
+    background: alpha(@light-error, 0.06);
+    border: 1px solid alpha(@light-error, 0.14);
+    color: @light-error;
     font-size: 13px;
     font-weight: 500;
 }
 
 .dialog-error image {
-    color: @error_color;
+    color: @light-error;
 }
 
 /* ── Dialog Actions ──────────────────────────────────────────── */
@@ -414,7 +439,7 @@ passwordentry button:hover {
 .dialog-actions {
     margin-top: 8px;
     padding-top: 6px;
-    border-top: 1px solid rgba(0, 0, 0, 0.05);
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 /* ── Detail Grid (network actions dialog) ───────────────────── */
@@ -432,11 +457,24 @@ passwordentry button:hover {
 .detail-key {
     font-size: 12px;
     font-weight: 600;
-    opacity: 0.72;
+    color: @light-text-secondary;
 }
 
 .detail-value {
     font-size: 12px;
+    color: @light-text-tertiary;
+}
+
+.dim-label {
+    color: @light-text-secondary;
+}
+
+headerbar button {
+    color: @light-text-tertiary;
+}
+
+headerbar button:hover {
+    color: @light-text-primary;
 }
 
 /* ── Universal Button Radius ────────────────────────────────── */
@@ -457,7 +495,7 @@ button {
 
 .dialog-window button.dialog-cancel {
     background: transparent;
-    color: rgba(0, 0, 0, 0.6);
+    color: @light-text-tertiary;
     border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
@@ -487,21 +525,20 @@ button {
 /* ── Destructive Action ──────────────────────────────────────── */
 
 .dialog-window button.destructive-action {
-    background: @error_color;
+    background: @light-error;
     color: #ffffff;
     border: none;
 }
 
 .dialog-window button.destructive-action:hover {
-    background: shade(@error_color, 1.08);
-    box-shadow: 0 2px 8px alpha(@error_color, 0.3);
+    background: @light-error-hover;
+    box-shadow: 0 2px 8px alpha(@light-error, 0.3);
 }
 
 /* ── Generic entry radii (lowest priority) ──────────────────── */
 
 entry,
-passwordentry,
-searchentry {
+passwordentry {
     border-radius: 8px;
     transition:
         border-color 0.15s ease,
@@ -509,12 +546,36 @@ searchentry {
 }
 
 entry:focus-within,
-passwordentry:focus-within,
-searchentry:focus-within {
-    border-color: alpha(@accent_bg_color, 0.32);
+passwordentry:focus-within {
+    border-color: alpha(@light-accent, 0.32);
 }
 
-/* ── Popover (base — applies to both modes) ─────────────────── */
+entry > text > placeholder,
+passwordentry > text > placeholder,
+entry.search > text > placeholder {
+    color: @light-text-muted;
+}
+
+/* ── Popover (light mode) ───────────────────────────────────── */
+
+popover,
+popover.background,
+popover.background > arrow,
+popover.background > contents,
+popover scrolledwindow,
+popover .background,
+popover .popover-content {
+    background: @light-bg-white;
+    color: @light-text-primary;
+}
+
+popover,
+popover.background {
+    padding: 0;
+    border: none;
+    outline: none;
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.15);
+}
 
 popover,
 popover contents,
@@ -523,19 +584,51 @@ popover arrow,
     border-radius: 12px;
 }
 
-popover {
+popover.background > contents {
     padding: 0;
-    border: none;
-    outline: none;
-    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.15);
-}
-
-popover .popover-content {
-    border-radius: 12px;
+    box-shadow: none;
 }
 
 .popover-content {
     padding: 16px;
+}
+
+.popover-label {
+    color: @light-text-primary;
+}
+
+.details-expander {
+    color: @light-text-primary;
+}
+
+popover button {
+    background: transparent;
+    color: @light-text-primary;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 8px;
+}
+
+popover button:hover {
+    background: rgba(0, 0, 0, 0.04);
+}
+
+popover checkbutton {
+    color: @light-text-primary;
+}
+
+popover checkbutton:hover {
+    background: rgba(0, 0, 0, 0.04);
+    border-radius: 6px;
+}
+
+popover check,
+popover radio {
+    color: @light-text-secondary;
+}
+
+popover check:checked,
+popover radio:checked {
+    color: @light-accent;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -574,6 +667,8 @@ popover .popover-content {
 }
 
 .dark-mode .network-listbox separator {
+    border: none;
+    min-height: 1px;
     background: alpha(white, 0.05);
 }
 
@@ -725,6 +820,7 @@ popover.dark-mode contents {
 popover.dark-mode,
 .popover.dark-mode {
     background: @dark-surface;
+    color: @dark-text;
     box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.7);
 }
 
