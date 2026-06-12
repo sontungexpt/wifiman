@@ -277,7 +277,7 @@ public class WifiNetworkRow : Gtk.Box {
      * Update the signal strength icon.
      */
     private void update_signal () {
-        signal_icon.icon_name = network.signal_icon_name;
+        signal_icon.set_from_icon_name (network.signal_icon_name);
     }
 
     /**

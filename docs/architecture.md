@@ -38,10 +38,11 @@ src/
                               UI-facing network state, sorting, filtering,
                               grouping, and action forwarding
    widgets/WifiNetworkRow.vala
-                               Reusable GTK row used for network rendering
+                                Reusable GTK row used for network rendering
 
    utils/WifiUtils.vala        SSID, security, and icon helper functions
-   utils/Logger.vala           File logging with GLib integration and rotation
+   utils/Logger.vala           Async file logging with GLib integration
+                                and log rotation
 data/
   resources.gresource.xml     Resource manifest for CSS and UI assets
 style.css                    Theme-aware GTK CSS with @define-color variables
@@ -49,7 +50,7 @@ docs/
   architecture.md            This file
    changelog/
      2026-06-11.md            Session changes
-     2026-06-12.md            Logging performance, signal cleanup, ref cycle fix
+     2026-06-12.md            Async logger, SignalIcon revert, bitrate fix
 ```
 
 ## Responsibilities
@@ -146,25 +147,19 @@ docs/
 
 ### `WifiNetworkRow`
 
-- Renders one network row
+- Renders one network row with a themed `Gtk.Image` signal icon
 - Handles header rows and network rows
 - Updates live when network properties change, including auto-connect status
 - Adds the hero styling for the connected network
 - Exposes a right-click action path for row menus and details
 - Renders compact metric pills for signal and speed
+- `signal_icon.icon_name` is updated via `WifiUtils.signal_strength_to_icon()`
+  whenever the network's `strength` property changes — no widget recreation
 - Stores `network` as `unowned` to break the reference cycle: signal closures
   on the WifiNetwork keep the row alive, but the row no longer keeps the
   network alive. When `rebuild()` removes a network from `networks_by_ssid`,
   the network is finalized, signal handlers are disconnected, and the row
   is finalized — no orphaned objects leak across scan cycles.
-
-### `SignalIcon`
-
-- Custom `Gtk.DrawingArea` that draws 4 Wi-Fi arc bars with Cairo
-- `strength` property maps 0-100 to 0–4 filled bars
-- No icon-theme dependency — works identically on every system
-- Uses CSS color from `Gtk.StyleContext.get_color()` for theme awareness
-- Respects `.signal-icon` CSS class rules
 
 ### `Logger`
 
@@ -174,18 +169,32 @@ docs/
 - Structured format: `[timestamp] [LEVEL] [Module] message`
 - Configurable max file size with automatic rotation (renames to `.old`)
 - Guarded by `--debug` CLI flag — no file I/O when disabled
+
+**Asynchronous design:**
+- All public API methods (`debug`, `info`, `warn`, `error`) only enqueue a
+  `LogEntry` onto a lock-free `AsyncQueue` — they never perform file I/O
+- A dedicated writer thread (`"wifiman-log"`) consumes the queue:
+  - `timeout_pop(100ms)` provides batching — bursts are collected without
+    per-message wakeup
+  - After each batch, file size is checked and rotation is performed
+    atomically inside the writer thread
+  - The file handle is flushed after each batch
 - `debug()` and `info()` gate on `debug_on` (mirrors `--debug`) before any
   formatting or GLib calls — true no-ops when `--debug` is not passed
-- `warn()` and `error()` always format (they target journald regardless)
-- No per-call `fflush()` on file writes — `FILE*` buffer flushes naturally
-  at ~4 KB boundaries; only `rotate()` and `shutdown()` call explicit flush
-- File handle released by OS on normal exit; `shutdown()` available for
-  explicit mid-process cleanup (e.g. before fork/exec)
+- `warn()` and `error()` always format and always go to journald regardless
+- `shutdown()` sets an atomic stop flag, pushes a sentinel entry to wake the
+  writer, then calls `join()` — guarantees all queued entries are flushed
+- The writer thread only exits after draining the queue and closing the file
+- Queue uses a full destroy function (`g_async_queue_new_full`) as a safety
+  net — any entries remaining on destruction are freed automatically
 
 ### `WifiUtils`
 
 - Converts SSID bytes to safe display strings
 - Maps NM security flags to app-level security values
+- Maps signal strength (0–100) to GNOME symbolic icon names
+  (`network-wireless-signal-*-symbolic`)
+- Formats bitrate, signal dBm, scan age, and connection health labels
 
 ## Features
 

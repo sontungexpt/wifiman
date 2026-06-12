@@ -49,3 +49,7 @@ continue in the background. Use `--toggle` or re-launch to bring it back.
 With `--debug`, logs are written to `~/.local/state/wifiman/wifiman.log`.
 Without the flag, only GLib journald/messages are active (visible via
 `journalctl`). Logs rotate automatically at 1 MiB (configurable).
+
+File writes are asynchronous — a dedicated writer thread consumes entries
+from a lock-free queue. Logging calls never block on disk I/O. The writer
+thread drains batches at 100ms intervals and performs rotation internally.
