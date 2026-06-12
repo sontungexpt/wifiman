@@ -1,7 +1,21 @@
 using Gtk;
 using GLib;
 
+/**
+ * A row widget for displaying a Wi-Fi network in a list.
+ *
+ * Shows an SSID label, signal icon, security badge, status badge,
+ * subtitle, and metrics (signal dBm, bitrate).  Supports both
+ * normal and hero (connected) styling and emits request_actions
+ * on right-click.
+ */
 public class WifiNetworkRow : Gtk.Box {
+    /**
+     * Emitted when the user requests action on the network (e.g.
+     * right-click).
+     *
+     * @param network  The network associated with this row.
+     */
     public signal void request_actions (WifiNetwork network);
 
     private Gtk.Label section_label;
@@ -24,10 +38,21 @@ public class WifiNetworkRow : Gtk.Box {
     private ulong security_id = 0;
     private ulong frequency_id = 0;
 
+    /**
+     * The currently displayed network, or null if the row is empty.
+     */
     public WifiNetwork? item_network {
         get { return network; }
     }
 
+    /**
+     * Construct the network row widget with signal icon, labels,
+     * and metrics.
+     *
+     * Builds the full row layout including SSID, status badges,
+     * security badge, signal icon, subtitle, and metric labels.
+     * Attaches a right-click gesture for the context menu.
+     */
     public WifiNetworkRow () {
         Object (orientation: Gtk.Orientation.VERTICAL, spacing: 0);
         add_css_class ("wifi-list-item");
@@ -120,6 +145,11 @@ public class WifiNetworkRow : Gtk.Box {
         add_controller (context_menu);
     }
 
+    /**
+     * Create a reusable metric label (hidden by default).
+     *
+     * @return A hidden Gtk.Label with the network-metric style class.
+     */
     private Gtk.Label build_metric_label () {
         var label = new Gtk.Label ("");
         label.visible = false;
@@ -128,6 +158,11 @@ public class WifiNetworkRow : Gtk.Box {
         return label;
     }
 
+    /**
+     * Toggle between hero (connected) and normal row styling.
+     *
+     * @param hero  Whether to apply hero (connected) styling.
+     */
     public void set_hero (bool hero) {
         if (hero) {
             add_css_class ("hero-network");
@@ -138,7 +173,18 @@ public class WifiNetworkRow : Gtk.Box {
         }
     }
 
+    /**
+     * Populate the row with data from a WifiListItem and bind
+     * property notifications.
+     *
+     * For HEADER items, only the section label is shown.  For
+     * NETWORK items, all fields are populated and property change
+     * handlers are attached to the WifiNetwork.
+     *
+     * @param item  The WifiListItem to render.
+     */
     public void set_item (WifiListItem item) {
+        Logger.debug ("NetworkRow", "Setting item: kind=%s", item.kind.to_string ());
         disconnect_network ();
         set_hero (false);
 
@@ -180,12 +226,19 @@ public class WifiNetworkRow : Gtk.Box {
         network.notify["health-text"].connect (() => update_metrics ());
     }
 
+    /**
+     * Clear the row and disconnect all network property bindings.
+     */
     public void clear () {
         disconnect_network ();
         section_label.visible = false;
         row_box.visible = false;
     }
 
+    /**
+     * Disconnect all property change handlers from the current
+     * network.
+     */
     private void disconnect_network () {
         if (network == null) {
             return;
@@ -209,6 +262,9 @@ public class WifiNetworkRow : Gtk.Box {
         network = null;
     }
 
+    /**
+     * Refresh all UI elements from the current network state.
+     */
     private void update_all () {
         ssid_label.label = network.ssid;
         update_signal ();
@@ -217,10 +273,19 @@ public class WifiNetworkRow : Gtk.Box {
         update_metrics ();
     }
 
+    /**
+     * Update the signal strength icon.
+     */
     private void update_signal () {
         signal_icon.icon_name = network.signal_icon_name;
     }
 
+    /**
+     * Update the connected/connecting/saved/failed status badge.
+     *
+     * Reads network.primary_status and primary_status_style to
+     * set both the label text and CSS style class.
+     */
     private void update_status () {
         var primary_status = network.primary_status;
         primary_status_label.label = primary_status;
@@ -239,6 +304,12 @@ public class WifiNetworkRow : Gtk.Box {
         }
     }
 
+    /**
+     * Update the security badge and subtitle text.
+     *
+     * Reads network.security_badge_text, security_badge_style,
+     * and subtitle to update the corresponding labels.
+     */
     private void update_security () {
         subtitle_label.label = network.subtitle;
         security_status_label.label = network.security_badge_text;
@@ -255,6 +326,12 @@ public class WifiNetworkRow : Gtk.Box {
         update_metrics ();
     }
 
+    /**
+     * Update signal and speed metric labels.
+     *
+     * Reads network.signal_dbm_text and bitrate_detail to update
+     * the metric labels.  Hides the metrics box if both are empty.
+     */
     private void update_metrics () {
         if (network == null) {
             return;

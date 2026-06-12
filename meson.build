@@ -25,6 +25,7 @@ src_files = [
   'src/widgets/WifiNetworkRow.vala',
   # Utils
   'src/utils/WifiUtils.vala',
+  'src/utils/Logger.vala',
 ]
 
 # Resource file

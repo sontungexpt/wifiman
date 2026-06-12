@@ -40,7 +40,8 @@ src/
    widgets/WifiNetworkRow.vala
                                Reusable GTK row used for network rendering
    widgets/SignalIcon.vala     Cairo-drawn Wi-Fi signal strength indicator
-  utils/WifiUtils.vala        SSID, security, and icon helper functions
+   utils/WifiUtils.vala        SSID, security, and icon helper functions
+   utils/Logger.vala           File logging with GLib integration and rotation
 data/
   resources.gresource.xml     Resource manifest for CSS and UI assets
 style.css                    Theme-aware GTK CSS with @define-color variables
@@ -55,7 +56,8 @@ docs/
 ### `Application`
 
 - Owns the `Gtk.Application`
-- Handles activation and command-line `--version` and `--toggle`
+- Handles activation and command-line `--version`, `--toggle`, and `--debug`
+- Initializes `Logger` with `--debug` flag for file logging
 - Registers a `"toggle"` GAction for show/hide via CLI
 - Keeps startup minimal
 
@@ -155,6 +157,15 @@ docs/
 - No icon-theme dependency — works identically on every system
 - Uses CSS color from `Gtk.StyleContext.get_color()` for theme awareness
 - Respects `.signal-icon` CSS class rules
+
+### `Logger`
+
+- Logs to `~/.local/state/wifiman/wifiman.log` when file logging is enabled
+- Integrates with GLib logging APIs (`GLib.debug`, `GLib.message`, etc.) for
+  journald/stderr output
+- Structured format: `[timestamp] [LEVEL] [Module] message`
+- Configurable max file size with automatic rotation (renames to `.old`)
+- Guarded by `--debug` CLI flag — no file I/O when disabled
 
 ### `WifiUtils`
 

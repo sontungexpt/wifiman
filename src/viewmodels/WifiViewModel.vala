@@ -1,38 +1,130 @@
 using GLib;
 using NM;
 
+/**
+ * Kinds of items that can appear in the network list.
+ */
 public enum WifiListItemKind {
+    /**
+     * A section header label (e.g. "Connected", "Available").
+     */
     HEADER,
+
+    /**
+     * A concrete WifiNetwork entry.
+     */
     NETWORK
 }
 
+/**
+ * A display item in the flat network list, wrapping either a
+ * header title or a WifiNetwork.
+ */
 public class WifiListItem : GLib.Object {
+    /**
+     * Whether this item is a section header or a network entry.
+     */
     public WifiListItemKind kind { get; construct; }
+
+    /**
+     * The section title (for HEADER items) or empty.
+     */
     public string title { get; construct; default = ""; }
+
+    /**
+     * The wrapped WifiNetwork (for NETWORK items) or null.
+     */
     public WifiNetwork? network { get; construct; default = null; }
 
+    /**
+     * Construct a header list item for section titles.
+     *
+     * @param title  The section header text.
+     */
     public WifiListItem.header (string title) {
         GLib.Object (kind: WifiListItemKind.HEADER, title: title);
     }
 
+    /**
+     * Construct a network list item wrapping a WifiNetwork.
+     *
+     * @param network  The network to wrap.
+     */
     public WifiListItem.for_network (WifiNetwork network) {
         GLib.Object (kind: WifiListItemKind.NETWORK, network: network);
     }
 }
 
+/**
+ * ViewModel for the Wi-Fi manager UI.
+ *
+ * Owns the full list of networks as a GLib.ListStore, manages
+ * scanning, auto-connect, search filtering, and connectivity
+ * state.  Connects to NetworkManagerService for all NM events.
+ */
 public class WifiViewModel : GLib.Object {
+    /**
+     * Emitted when a non-recoverable error occurs.
+     *
+     * @param message  Human-readable error description.
+     */
     public signal void error (string message);
 
+    /**
+     * The flat list of items (headers + networks) displayed in the UI.
+     */
     public GLib.ListStore items { get; private set; }
+
+    /**
+     * Whether a scan is currently in progress.
+     */
     public bool scanning { get; private set; default = false; }
+
+    /**
+     * Whether any networks have been discovered via scanning.
+     */
     public bool has_networks { get; private set; default = false; }
+
+    /**
+     * Whether the user has entered a search query.
+     */
     public bool search_active { get; private set; default = false; }
+
+    /**
+     * Whether any networks match the current search filter.
+     */
     public bool has_visible_networks { get; private set; default = false; }
+
+    /**
+     * Whether a network is currently connected.
+     */
     public bool has_connected_network { get; private set; default = false; }
+
+    /**
+     * Whether a captive portal is detected.
+     */
     public bool captive_portal { get; private set; default = false; }
+
+    /**
+     * Human-readable connectivity label (e.g. "Internet access").
+     */
     public string connectivity_text { get; private set; default = ""; }
+
+    /**
+     * Human-readable scan age text (e.g. "Updated 30 seconds ago").
+     */
     public string scan_freshness { get; private set; default = "No recent scan"; }
+
+    /**
+     * SSID of the last successfully connected network.
+     */
     public string last_successful_network { get; private set; default = ""; }
+
+    /**
+     * Whether the Wi-Fi radio is enabled.
+     *
+     * Setting this property toggles the radio via NetworkManagerService.
+     */
     public bool wireless_enabled {
         get { return service.wireless_enabled; }
         set {
@@ -55,9 +147,19 @@ public class WifiViewModel : GLib.Object {
     private const uint DISCONNECT_COOLDOWN_MS = 30000;
     private bool _started = false;
 
+    /**
+     * Whether auto-reconnect to previously saved networks is enabled.
+     */
     public bool auto_reconnect_enabled { get; set; default = true; }
 
+    /**
+     * Initialise the ViewModel, connect service signals, and start
+     * background scanning.
+     *
+     * @param service  The NetworkManagerService to bind to.
+     */
     public WifiViewModel (NetworkManagerService service) {
+        Logger.info ("WifiViewModel", "Initializing WifiViewModel");
         this.service = service;
         items = new GLib.ListStore (typeof (WifiListItem));
 
@@ -83,6 +185,9 @@ public class WifiViewModel : GLib.Object {
         _started = true;
     }
 
+    /**
+     * Clean up timers and signal handlers on disposal.
+     */
     ~WifiViewModel () {
         if (settle_scan_id != 0) {
             Source.remove (settle_scan_id);
@@ -98,7 +203,16 @@ public class WifiViewModel : GLib.Object {
         }
     }
 
+    /**
+     * Set the search filter text and rebuild the displayed items.
+     *
+     * The search is case-insensitive and stripped of leading/trailing
+     * whitespace.
+     *
+     * @param text  The new search query.
+     */
     public void set_search_text (string text) {
+        Logger.debug ("WifiViewModel", "Setting search text: \"%s\"", text);
         var normalized = text.strip ().down ();
         if (normalized == search_text) {
             return;
@@ -110,11 +224,19 @@ public class WifiViewModel : GLib.Object {
         rebuild_items ();
     }
 
+    /**
+     * Request a new Wi-Fi scan from NetworkManager.
+     *
+     * Async method, does not block the UI thread.  The scanning
+     * property is set to true during the scan.
+     */
     public async void scan () {
         if (scanning) {
+            Logger.debug ("WifiViewModel", "Scan already in progress, skipping");
             return;
         }
 
+        Logger.info ("WifiViewModel", "Starting Wi-Fi scan");
         try {
             yield service.request_scan ();
             schedule_rebuild ();
@@ -126,27 +248,80 @@ public class WifiViewModel : GLib.Object {
         }
     }
 
+    /**
+     * Connect to a network, optionally supplying a password and username.
+     *
+     * Async method, does not block the UI thread.
+     *
+     * @param network   The network to connect to.
+     * @param password  Optional WPA password or 802.1X password.
+     * @param username  Optional 802.1X username.
+     * @throws Error if NetworkManager rejects the connection request.
+     */
     public async void connect_network (WifiNetwork network, string? password = null, string? username = null) throws GLib.Error {
+        Logger.info ("WifiViewModel", "Connecting to network: %s", network.ssid);
         yield service.connect_network (network, password, username);
     }
 
+    /**
+     * Disconnect and reconnect to a network.
+     *
+     * Useful for refreshing a stale connection without closing the
+     * dialog.  Async, does not block the UI thread.
+     *
+     * @param network   The network to reconnect.
+     * @param password  Optional new password.
+     * @param username  Optional new 802.1X username.
+     * @throws Error if NetworkManager rejects the request.
+     */
     public async void reconnect_network (WifiNetwork network, string? password = null, string? username = null) throws GLib.Error {
+        Logger.info ("WifiViewModel", "Reconnecting network: %s", network.ssid);
         if (network.active_connection != null) {
             yield service.disconnect_network (network);
         }
         yield service.connect_network (network, password, username);
     }
 
+    /**
+     * Disconnect an active network connection.
+     *
+     * Async, does not block the UI thread.
+     *
+     * @param network  The network to disconnect.
+     * @throws Error if NetworkManager rejects the request.
+     */
     public async void disconnect_network (WifiNetwork network) throws GLib.Error {
+        Logger.info ("WifiViewModel", "Disconnecting network: %s", network.ssid);
         yield service.disconnect_network (network);
     }
 
+    /**
+     * Forget a saved network connection.
+     *
+     * Removes the connection profile from NetworkManager.  Async,
+     * does not block the UI thread.
+     *
+     * @param network  The network to forget.
+     * @throws Error if NetworkManager rejects the request.
+     */
     public async void forget_network (WifiNetwork network) throws GLib.Error {
+        Logger.info ("WifiViewModel", "Forgetting network: %s", network.ssid);
         yield service.forget_network (network);
     }
 
+    /**
+     * Attempt to auto-connect to a saved network if no active Wi-Fi
+     * connection exists.
+     *
+     * Respects cooldown timers for auto-connect and manual disconnect.
+     *
+     * @param network  The saved network to try.
+     */
     public async void try_auto_connect (WifiNetwork network) {
-        if (!_started || !auto_reconnect_enabled) return;
+        if (!_started || !auto_reconnect_enabled) {
+            Logger.debug ("WifiViewModel", "Auto-connect skipped: _started=%s, auto_reconnect_enabled=%s", _started.to_string (), auto_reconnect_enabled.to_string ());
+            return;
+        }
         if (has_active_wifi_connection ()) return;
         if (network.is_connected || network.is_connecting || network.auto_connecting) {
             return;
@@ -173,14 +348,23 @@ public class WifiViewModel : GLib.Object {
         });
 
         try {
+            Logger.info ("WifiViewModel", "Auto-connecting to: %s", network.ssid);
             yield service.connect_network (network, null, null);
         } catch (GLib.Error e) {
+            Logger.warn ("WifiViewModel", "Auto-connect failed for %s: %s", network.ssid, e.message);
             network.auto_connecting = false;
             network.connecting_status_text = "";
         }
     }
 
+    /**
+     * Record a manual disconnect to prevent auto-reconnect for a
+     * cooldown period.
+     *
+     * @param ssid  The SSID that was manually disconnected.
+     */
     public void record_disconnect (string ssid) {
+        Logger.debug ("WifiViewModel", "Recording disconnect cooldown for: %s", ssid);
         disconnect_cooldowns.insert (ssid, true);
         Timeout.add (DISCONNECT_COOLDOWN_MS, () => {
             disconnect_cooldowns.remove (ssid);
@@ -188,6 +372,12 @@ public class WifiViewModel : GLib.Object {
         });
     }
 
+    /**
+     * Check whether any Wi-Fi connection is in ACTIVATED or ACTIVATING
+     * state.
+     *
+     * @return true if there is an active or activating Wi-Fi connection.
+     */
     private bool has_active_wifi_connection () {
         foreach (var active in service.get_active_connections ()) {
             if (active.get_connection_type () != "802-11-wireless") continue;
@@ -199,8 +389,16 @@ public class WifiViewModel : GLib.Object {
         return false;
     }
 
+    /**
+     * Attempt auto-connect on all saved networks that are not currently
+     * connected.
+     *
+     * Iterates over every known network and tries auto-connect if
+     * eligible.
+     */
     private void try_auto_connect_all () {
         if (!_started || !auto_reconnect_enabled) return;
+        Logger.debug ("WifiViewModel", "Checking networks for auto-connect");
         if (has_active_wifi_connection ()) return;
         networks_by_ssid.foreach ((ssid, network) => {
             if (network.saved_connection == null) return;
@@ -213,10 +411,19 @@ public class WifiViewModel : GLib.Object {
         });
     }
 
+    /**
+     * Debounce rebuild to settle rapid changes from NetworkManager
+     * signals.
+     *
+     * Waits 120 ms after the last change signal before triggering
+     * a full rebuild.
+     */
     private void schedule_rebuild () {
         if (settle_scan_id != 0) {
+            Logger.debug ("WifiViewModel", "Rebuild already scheduled, skipping");
             return;
         }
+        Logger.debug ("WifiViewModel", "Scheduling rebuild in 120ms");
 
         settle_scan_id = Timeout.add (120, () => {
             settle_scan_id = 0;
@@ -225,6 +432,11 @@ public class WifiViewModel : GLib.Object {
         });
     }
 
+    /**
+     * Start a periodic background scan every 45 seconds.
+     *
+     * Only scans when the Wi-Fi radio is enabled.
+     */
     private void start_background_scan () {
         if (background_scan_id != 0) {
             return;
@@ -238,7 +450,17 @@ public class WifiViewModel : GLib.Object {
         });
     }
 
+    /**
+     * Rebuild the internal network state from all devices and
+     * connections.
+     *
+     * Clears the network hash table, iterates over all Wi-Fi
+     * devices and their access points, applies saved and active
+     * connections, refreshes runtime details, and triggers
+     * auto-connect.
+     */
     private void rebuild () {
+        Logger.debug ("WifiViewModel", "Rebuilding network state");
         networks_by_ssid.remove_all ();
 
         foreach (var device in service.get_devices ()) {
@@ -260,6 +482,17 @@ public class WifiViewModel : GLib.Object {
         try_auto_connect_all ();
     }
 
+    /**
+     * Add or update a network entry from an access point, keeping
+     * the strongest signal.
+     *
+     * If the network already exists and the new AP has a weaker
+     * signal, the existing entry is preserved but its AP count
+     * is incremented.
+     *
+     * @param device  The Wi-Fi device the AP was found on.
+     * @param ap      The access point to incorporate.
+     */
     private void add_or_update_access_point (NM.DeviceWifi device, NM.AccessPoint ap) {
         var ssid = WifiUtils.ssid_to_string (ap.get_ssid ());
         if (ssid.length == 0) {
@@ -280,7 +513,14 @@ public class WifiViewModel : GLib.Object {
         }
     }
 
+    /**
+     * Mark networks that have saved connections in NetworkManager.
+     *
+     * Iterates over all NM.RemoteConnection objects and sets the
+     * is_saved flag on matching WifiNetwork entries.
+     */
     private void apply_saved_connections () {
+        Logger.debug ("WifiViewModel", "Applying saved connections");
         foreach (var connection in service.get_connections ()) {
             var wifi = connection.get_setting_wireless ();
             if (wifi == null || wifi.get_ssid () == null) {
@@ -302,7 +542,15 @@ public class WifiViewModel : GLib.Object {
         }
     }
 
+    /**
+     * Apply active connection state to networks, marking connected
+     * and saved status.
+     *
+     * Creates synthetic WifiNetwork entries for active connections
+     * that were not discovered via access-point scanning.
+     */
     private void apply_active_connections () {
+        Logger.debug ("WifiViewModel", "Applying active connections");
         foreach (var active in service.get_active_connections ()) {
             if (active.get_connection_type () != "802-11-wireless") {
                 continue;
@@ -339,7 +587,19 @@ public class WifiViewModel : GLib.Object {
         }
     }
 
+    /**
+     * Create a network entry for the currently active connection by
+     * scanning devices.
+     *
+     * Falls back to a minimal entry with just SSID if no matching
+     * access point is found.
+     *
+     * @param ssid       The SSID string.
+     * @param ssid_bytes  The raw SSID bytes.
+     * @return A new WifiNetwork, or null on failure.
+     */
     private WifiNetwork? create_connected_network (string ssid, GLib.Bytes ssid_bytes) {
+        Logger.debug ("WifiViewModel", "Creating connected network entry for: %s", ssid);
         foreach (var device in service.get_devices ()) {
             if (!(device is NM.DeviceWifi)) {
                 continue;
@@ -366,7 +626,15 @@ public class WifiViewModel : GLib.Object {
         return fallback;
     }
 
+    /**
+     * Refresh runtime connection details (IP, gateway, DNS) for all
+     * networks.
+     *
+     * Also updates the captive_portal and connectivity_text
+     * properties.
+     */
     private void refresh_runtime_details () {
+        Logger.debug ("WifiViewModel", "Refreshing runtime details");
         var connectivity = service.connectivity;
 
         networks_by_ssid.foreach ((ssid, network) => {
@@ -379,7 +647,11 @@ public class WifiViewModel : GLib.Object {
         notify_property ("connectivity-text");
     }
 
+    /**
+     * Update connectivity state and portal detection.
+     */
     private void update_connectivity_state () {
+        Logger.debug ("WifiViewModel", "Updating connectivity state");
         var connectivity = service.connectivity;
         captive_portal = connectivity == NM.ConnectivityState.PORTAL;
         connectivity_text = service.connectivity_label;
@@ -387,6 +659,10 @@ public class WifiViewModel : GLib.Object {
         notify_property ("connectivity-text");
     }
 
+    /**
+     * Determine the most recent scan timestamp across all Wi-Fi
+     * devices.
+     */
     private void update_scan_freshness () {
         freshest_scan = -1;
 
@@ -405,17 +681,36 @@ public class WifiViewModel : GLib.Object {
         apply_freshness ();
     }
 
+    /**
+     * Update the scan freshness display text.
+     */
     private void apply_freshness () {
         scan_freshness = WifiUtils.format_scan_age (freshest_scan);
         notify_property ("scan-freshness");
     }
 
+    /**
+     * Periodic timer callback to refresh scan age text.
+     *
+     * Called every 5 seconds.
+     *
+     * @return Source.CONTINUE to keep the timer alive.
+     */
     private bool tick_freshness () {
         apply_freshness ();
         return Source.CONTINUE;
     }
 
+    /**
+     * Rebuild the list of items displayed in the UI from the
+     * current network state.
+     *
+     * Sorts connected and available networks, creates section
+     * headers, and updates has_networks / has_visible_networks /
+     * has_connected_network properties.
+     */
     private void rebuild_items () {
+        Logger.debug ("WifiViewModel", "Rebuilding display items");
         items.remove_all ();
 
         var connected = new GLib.GenericArray<WifiNetwork> ();
@@ -468,10 +763,26 @@ public class WifiViewModel : GLib.Object {
         }
     }
 
+    /**
+     * Check if the network was discovered via scanning (has an
+     * access point).
+     *
+     * @param network  The network to check.
+     * @return true if the network has a known access point.
+     */
     private bool is_scanned (WifiNetwork network) {
         return network.access_point != null;
     }
 
+    /**
+     * Check if the network matches the current search filter.
+     *
+     * Search is case-insensitive and matches against the lowercased
+     * SSID.
+     *
+     * @param network  The network to check.
+     * @return true if the network passes the filter.
+     */
     private bool matches_search (WifiNetwork network) {
         if (search_text.length == 0) {
             return true;
@@ -479,6 +790,15 @@ public class WifiViewModel : GLib.Object {
         return network.lower_ssid.contains (search_text);
     }
 
+    /**
+     * Append a titled section of networks to the item list.
+     *
+     * Creates a WifiListItem.HEADER followed by WifiListItem.FOR_NETWORK
+     * entries for each network in the array.
+     *
+     * @param title     The section title.
+     * @param networks  The networks in this section.
+     */
     private void append_section (string title, GLib.GenericArray<WifiNetwork> networks) {
         if (networks.length == 0) {
             return;
@@ -490,6 +810,12 @@ public class WifiViewModel : GLib.Object {
         }
     }
 
+    /**
+     * Sort networks by signal strength descending, then by SSID
+     * ascending.
+     *
+     * @param networks  The array to sort in-place.
+     */
     private void sort_networks (GLib.GenericArray<WifiNetwork> networks) {
         networks.sort ((a, b) => {
             if (a == null && b == null) {

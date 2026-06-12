@@ -191,7 +191,7 @@ User clicks refresh
             └─ device.request_scan_async ()
 
 User types in search
-  └─ search_entry.search_changed
+  └─ ((Gtk.Editable) search_entry).changed
        └─ queue_search_update ()  ← 120ms debounce
             └─ manager.set_search_text ()
                  └─ rebuild_items ()  ← filters existing data, no NM call

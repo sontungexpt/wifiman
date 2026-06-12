@@ -29,6 +29,7 @@ Single Gtk.Application instance. All invocations route to the same process.
 | `./build/wifiman` | Launches the window, or brings it to focus if already running |
 | `./build/wifiman --toggle` | Launches the window, or hides/shows the existing instance |
 | `./build/wifiman --version` | Prints version and exits |
+| `./build/wifiman --debug`  | Launches with file logging enabled |
 
 Closing the window hides it instead of quitting. Scanning and auto-connect
 continue in the background. Use `--toggle` or re-launch to bring it back.
@@ -42,3 +43,9 @@ continue in the background. Use `--toggle` or re-launch to bring it back.
   connection is never disrupted automatically
 - See `docs/architecture.md` for module responsibilities, features, and roadmap
 - See `docs/changelog/` for dated records of session changes
+
+## Logging
+
+With `--debug`, logs are written to `~/.local/state/wifiman/wifiman.log`.
+Without the flag, only GLib journald/messages are active (visible via
+`journalctl`). Logs rotate automatically at 1 MiB (configurable).
