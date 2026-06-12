@@ -29,7 +29,7 @@ public class WifiNetworkRow : Gtk.Box {
     private Gtk.Label primary_status_label;
     private Gtk.Label security_status_label;
 
-    private WifiNetwork? network;
+    private unowned WifiNetwork? network;
     private ulong strength_id = 0;
     private ulong connected_id = 0;
     private ulong saved_id = 0;
@@ -41,7 +41,7 @@ public class WifiNetworkRow : Gtk.Box {
     /**
      * The currently displayed network, or null if the row is empty.
      */
-    public WifiNetwork? item_network {
+    public unowned WifiNetwork? item_network {
         get { return network; }
     }
 

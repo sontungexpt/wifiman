@@ -3,6 +3,7 @@ namespace Logger {
     private static string? file_path = null;
     private static uint max_size = 0;
     private static bool enabled = false;
+    private static bool debug_on = false;
 
     private static string timestamp () {
         var now = new DateTime.now_local ();
@@ -11,7 +12,10 @@ namespace Logger {
 
     private static void rotate () {
         if (file_path == null) return;
-        file_stream = null;
+        if (file_stream != null) {
+            file_stream.flush ();
+            file_stream = null;
+        }
         var old = file_path + ".old";
         FileUtils.remove (old);
         FileUtils.rename (file_path, old);
@@ -22,10 +26,27 @@ namespace Logger {
         if (file_stream == null || file_path == null) return;
         var line = "[%s] [%s] [%s] %s\n".printf (timestamp (), level, module, msg);
         file_stream.printf (line);
-        file_stream.flush ();
         if (max_size > 0 && file_stream.tell () >= (long) max_size) {
             rotate ();
         }
+    }
+
+    /**
+     * Flush buffered data and release the file handle.
+     *
+     * Optional — on normal exit the C runtime closes all
+     * FILE* handles automatically.  Call explicitly only
+     * when you need guaranteed flush mid-process (e.g.
+     * before fork or exec).
+     */
+    public static void shutdown () {
+        if (file_stream != null) {
+            write_file ("INFO", "Logger", "Session ended");
+            file_stream.flush ();
+            file_stream = null;
+        }
+        enabled = false;
+        file_path = null;
     }
 
     /**
@@ -45,6 +66,7 @@ namespace Logger {
      */
     public static void init (bool enable_file = false, uint log_max_size = 1024 * 1024) {
         enabled = true;
+        debug_on = enable_file;
         if (!enable_file) return;
         var dir = Path.build_filename (Environment.get_user_state_dir (), "wifiman");
         DirUtils.create_with_parents (dir, 0755);
@@ -70,7 +92,7 @@ namespace Logger {
      *   Format arguments.
      */
     public static void debug (string module, string format, ...) {
-        if (!enabled) return;
+        if (!debug_on) return;
         var args = va_list ();
         var msg = format.vprintf (args);
         GLib.debug ("[%s] %s", module, msg);
@@ -90,7 +112,7 @@ namespace Logger {
      *   Format arguments.
      */
     public static void info (string module, string format, ...) {
-        if (!enabled) return;
+        if (!debug_on) return;
         var args = va_list ();
         var msg = format.vprintf (args);
         GLib.message ("[%s] %s", module, msg);

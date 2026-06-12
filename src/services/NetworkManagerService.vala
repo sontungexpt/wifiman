@@ -64,6 +64,7 @@ public class NetworkManagerService : GLib.Object {
     private ulong active_connection_added_id = 0;
     private ulong active_connection_removed_id = 0;
     private ulong wireless_enabled_id = 0;
+    private ulong connectivity_notify_id = 0;
     private class WifiDeviceSignals {
         public ulong access_point_added_id;
         public ulong access_point_removed_id;
@@ -306,7 +307,7 @@ public class NetworkManagerService : GLib.Object {
             changed ();
         });
         wireless_enabled_id = client.notify["wireless-enabled"].connect (() => changed ());
-        client.notify["connectivity"].connect (() => changed ());
+        connectivity_notify_id = client.notify["connectivity"].connect (() => changed ());
     }
 
     /**
@@ -401,6 +402,7 @@ public class NetworkManagerService : GLib.Object {
         if (active_connection_added_id != 0) client.disconnect (active_connection_added_id);
         if (active_connection_removed_id != 0) client.disconnect (active_connection_removed_id);
         if (wireless_enabled_id != 0) client.disconnect (wireless_enabled_id);
+        if (connectivity_notify_id != 0) client.disconnect (connectivity_notify_id);
 
         wifi_signal_ids.foreach ((device, ids) => {
             disconnect_wifi_device_signals (device, ids);

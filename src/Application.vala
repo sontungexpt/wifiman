@@ -196,6 +196,7 @@ public class Application : Gtk.Application {
             Logger.warn ("Application", "Failed to save color scheme to settings.ini: %s", e.message);
         }
     }
+
 }
 
 // Configuration constants

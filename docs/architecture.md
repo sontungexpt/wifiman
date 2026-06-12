@@ -39,7 +39,7 @@ src/
                               grouping, and action forwarding
    widgets/WifiNetworkRow.vala
                                Reusable GTK row used for network rendering
-   widgets/SignalIcon.vala     Cairo-drawn Wi-Fi signal strength indicator
+
    utils/WifiUtils.vala        SSID, security, and icon helper functions
    utils/Logger.vala           File logging with GLib integration and rotation
 data/
@@ -47,8 +47,9 @@ data/
 style.css                    Theme-aware GTK CSS with @define-color variables
 docs/
   architecture.md            This file
-  changelog/
-    2026-06-11.md            Session changes
+   changelog/
+     2026-06-11.md            Session changes
+     2026-06-12.md            Logging performance, signal cleanup, ref cycle fix
 ```
 
 ## Responsibilities
@@ -123,6 +124,8 @@ docs/
 - Disconnects and forgets saved networks on request
 - Does not expose a saved-network list to the UI layer
 - Exposes the current connectivity state for portal / limited / full access
+- Tracks all signal handler IDs for cleanup in `disconnect_signals()`,
+  including `client.notify["connectivity"]` (`connectivity_notify_id`)
 
 ### `WifiNetwork`
 
@@ -149,6 +152,11 @@ docs/
 - Adds the hero styling for the connected network
 - Exposes a right-click action path for row menus and details
 - Renders compact metric pills for signal and speed
+- Stores `network` as `unowned` to break the reference cycle: signal closures
+  on the WifiNetwork keep the row alive, but the row no longer keeps the
+  network alive. When `rebuild()` removes a network from `networks_by_ssid`,
+  the network is finalized, signal handlers are disconnected, and the row
+  is finalized — no orphaned objects leak across scan cycles.
 
 ### `SignalIcon`
 
@@ -166,6 +174,13 @@ docs/
 - Structured format: `[timestamp] [LEVEL] [Module] message`
 - Configurable max file size with automatic rotation (renames to `.old`)
 - Guarded by `--debug` CLI flag — no file I/O when disabled
+- `debug()` and `info()` gate on `debug_on` (mirrors `--debug`) before any
+  formatting or GLib calls — true no-ops when `--debug` is not passed
+- `warn()` and `error()` always format (they target journald regardless)
+- No per-call `fflush()` on file writes — `FILE*` buffer flushes naturally
+  at ~4 KB boundaries; only `rotate()` and `shutdown()` call explicit flush
+- File handle released by OS on normal exit; `shutdown()` available for
+  explicit mid-process cleanup (e.g. before fork/exec)
 
 ### `WifiUtils`
 
