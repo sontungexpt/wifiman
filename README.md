@@ -1,11 +1,36 @@
 # wifiman
 
+<<<<<<< HEAD
 GTK4 Wi-Fi scanner written in Vala. Dependency-light: uses GTK4 and libnm,
 no libadwaita. Designed as a Waybar popup but also runs standalone.
 
 The UI shows only networks currently detected by active scans. Saved profiles
 remain in the NetworkManager backend for auto-connect and authentication reuse,
 but are not listed unless the SSID is visible in scan results.
+=======
+A lightweight GTK4 Wi-Fi manager for Linux. Uses GTK4 and libnm — no
+libadwaita. Works as a Waybar popup or standalone window.
+
+It shows only networks detected by active scans. Saved profiles remain
+in NetworkManager for auto-connect but are not listed unless the SSID
+is visible in scan results.
+
+## Features
+
+- Scan for nearby Wi-Fi networks in real time
+- Connect to open, WPA/WPA2/WPA3, and Enterprise (PEAP/MSCHAPv2) networks
+- Search networks by SSID with live filtering
+- Auto-connect to known networks when detected (never disconnects the
+  active connection automatically)
+- Captive portal detection with banner
+- Network details: security, band, signal dBm, bitrate, IP, gateway, DNS
+- Connect / Reconnect / Disconnect / Forget actions
+- Wi-Fi toggle (turning Wi-Fi OFF closes the app)
+- Three color schemes: System, Light, Dark (persists across sessions)
+- Background scanning every 45 seconds
+- Custom Cairo-drawn signal icon (works with any icon theme)
+- Debug logging to file with `--debug`
+>>>>>>> 1c15026 (update readme)
 
 ## Build
 
@@ -14,12 +39,42 @@ meson setup build
 meson compile -C build
 ```
 
+<<<<<<< HEAD
 Run with:
+=======
+Requires: `meson`, `valac`, `gtk4` (build), `libnm` (runtime).
+>>>>>>> 1c15026 (update readme)
 
-```bash
-./build/wifiman
+## Usage
+
+Single-instance application — all invocations route to the same process.
+
+| Command | Behavior |
+|---|---|
+| `./build/wifiman` | Open window, or bring to focus if already running |
+| `./build/wifiman --toggle` | Open window, or hide/show existing instance |
+| `./build/wifiman --version` | Print version and exit |
+| `./build/wifiman --debug` | Open with file logging enabled |
+
+Closing the window hides it instead of quitting. Scanning and auto-connect
+continue in the background. Use `--toggle` or re-launch to bring it back.
+
+## Color scheme
+
+Three modes via the gear menu: **System** (follows GNOME preference),
+**Light**, **Dark**. The choice persists in `~/.config/wifiman/settings.ini`.
+
+## Waybar integration
+
+Add to `~/.config/waybar/config.jsonc`:
+
+```jsonc
+{
+    "on-click": "~/.config/waybar/scripts/wifiman/build/wifiman --toggle"
+}
 ```
 
+<<<<<<< HEAD
 ## CLI
 
 Single Gtk.Application instance. All invocations route to the same process.
@@ -167,3 +222,12 @@ icons all resolve to the same fallback).
 
 `network.strength` is bound to `signal_icon.strength` via `GLib.Binding`
 with `SYNC_CREATE` — no manual signal handler needed.
+=======
+After rebuilding, kill the old process first: `pkill wifiman`
+
+## Logging
+
+With `--debug`, logs are written to `~/.local/state/wifiman/wifiman.log`
+and rotate automatically at 1 MB. Without the flag, messages go to
+journald (visible via `journalctl`).
+>>>>>>> 1c15026 (update readme)
