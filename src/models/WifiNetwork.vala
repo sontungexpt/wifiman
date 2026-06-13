@@ -307,22 +307,7 @@ public class WifiNetwork : GLib.Object {
      * @return "WEP", "WPA", "WPA2", "WPA3", "Enterprise", or "Open".
      */
     public string security_badge_text {
-        owned get {
-            switch (security) {
-                case WifiSecurity.WEP:
-                    return "WEP";
-                case WifiSecurity.WPA:
-                    return "WPA";
-                case WifiSecurity.WPA2:
-                    return "WPA2";
-                case WifiSecurity.WPA3:
-                    return "WPA3";
-                case WifiSecurity.ENTERPRISE:
-                    return "Enterprise";
-                default:
-                    return "Open";
-            }
-        }
+        owned get { return security_type; }
     }
 
     /**
@@ -370,21 +355,6 @@ public class WifiNetwork : GLib.Object {
     }
 
     /**
-     * Signal detail as dBm text.
-     *
-     * @return Empty string if strength is zero, otherwise the dBm label.
-     */
-    public string signal_detail {
-        owned get {
-            if (strength <= 0) {
-                return "";
-            }
-
-            return "%s".printf (WifiUtils.signal_dbm_label (strength));
-        }
-    }
-
-    /**
      * Formatted bitrate string (e.g. "1300 Mbps").
      *
      * @return Empty string if bitrate is zero.
@@ -420,7 +390,7 @@ public class WifiNetwork : GLib.Object {
     public string metrics_text {
         owned get {
             var builder = new GLib.StringBuilder ();
-            append_summary_part (builder, signal_detail);
+            append_summary_part (builder, signal_dbm_text);
             append_summary_part (builder, bitrate_detail);
             append_summary_part (builder, scan_age_text);
             return builder.str;
@@ -437,7 +407,7 @@ public class WifiNetwork : GLib.Object {
         owned get {
             var builder = new GLib.StringBuilder ();
             append_summary_part (builder, ssid);
-            append_summary_part (builder, signal_detail);
+            append_summary_part (builder, signal_dbm_text);
             append_summary_part (builder, bitrate_detail);
             append_summary_part (builder, ip_address);
             if (gateway.length > 0) {

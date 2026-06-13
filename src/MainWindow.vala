@@ -508,10 +508,6 @@ public class MainWindow : Gtk.ApplicationWindow {
      * from the ViewModel.
      */
     private void update_status_strip () {
-        if (scan_status_label == null || connectivity_status_label == null || portal_banner == null) {
-            return;
-        }
-
         scan_status_label.label = manager.scan_freshness;
         connectivity_status_label.label = manager.connectivity_text;
         portal_banner.visible = manager.captive_portal;
@@ -748,6 +744,12 @@ public class MainWindow : Gtk.ApplicationWindow {
             yield manager.connect_network (network, password, username);
         } catch (GLib.Error e) {
             Logger.warn ("MainWindow", "Failed to connect to '%s': %s", network.ssid, e.message);
+
+            if (network.saved_connection != null && password == null) {
+                show_connect_dialog (network, e.message);
+                return;
+            }
+
             error_subtitle.label = e.message;
             stack.visible_child_name = "error";
         }
@@ -760,7 +762,7 @@ public class MainWindow : Gtk.ApplicationWindow {
      *
      * @param network  The secured network to connect to.
      */
-    private void show_connect_dialog (WifiNetwork network) {
+    private void show_connect_dialog (WifiNetwork network, string? error_message = null) {
         Logger.info ("MainWindow", "Showing connect dialog for: %s", network.ssid);
         var dialog = new Gtk.Window ();
         dialog.title = network.ssid;
@@ -794,7 +796,11 @@ public class MainWindow : Gtk.ApplicationWindow {
 
         var error_box = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 8);
         error_box.add_css_class ("dialog-error");
-        error_box.visible = false;
+        if (error_message != null) {
+            error_box.visible = true;
+        } else {
+            error_box.visible = false;
+        }
 
         var error_icon = new Gtk.Image.from_icon_name ("dialog-warning-symbolic");
         error_icon.pixel_size = 16;
@@ -805,6 +811,9 @@ public class MainWindow : Gtk.ApplicationWindow {
         error_label.hexpand = true;
         error_label.wrap = true;
         error_box.append (error_label);
+        if (error_message != null) {
+            error_label.label = error_message;
+        }
         body.append (error_box);
 
         var actions = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 10);

@@ -130,27 +130,7 @@ public class NetworkManagerService : GLib.Object {
         }
     }
 
-    /**
-     * Disconnect all signals on cleanup.
-     *
-     * g_signal_connect_object auto-disconnects during finalization,
-     * so no manual cleanup is needed here.
-     */
-    ~NetworkManagerService () {
-    }
 
-    /**
-     * Shut down the service.
-     *
-     * Signal handlers and NM object references are cleaned up by
-     * Vala-generated finalize code and the g_signal_connect_object
-     * weak-ref mechanism during finalization.  Manually freeing
-     * NM objects here would leave dangling pointers in the
-     * g_signal_connect_object internal tracking, causing
-     * g_signal_handler_disconnect: assertion failures at shutdown.
-     */
-    public void shutdown () {
-    }
 
     /**
      * Enable or disable the Wi-Fi radio.

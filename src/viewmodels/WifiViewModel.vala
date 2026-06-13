@@ -193,9 +193,7 @@ public class WifiViewModel : GLib.Object {
             Source.remove (_manual_connect_timeout_id);
             _manual_connect_timeout_id = 0;
         }
-        if (service != null) {
-            service.shutdown ();
-        }
+
     }
 
     /**
@@ -212,11 +210,9 @@ public class WifiViewModel : GLib.Object {
         service_changed_id = service.changed.connect (() => schedule_rebuild ());
         service_scan_started_id = service.scan_started.connect (() => {
             scanning = true;
-            notify_property ("scanning");
         });
         service_scan_finished_id = service.scan_finished.connect (() => {
             scanning = false;
-            notify_property ("scanning");
             schedule_rebuild ();
         });
         service_error_id = service.error.connect ((message) => error (message));
@@ -225,7 +221,6 @@ public class WifiViewModel : GLib.Object {
         disconnect_cooldowns = new GLib.HashTable<string, bool> (GLib.str_hash, GLib.str_equal);
 
         rebuild ();
-        update_connectivity_state ();
         start_background_scan ();
         freshness_timer_id = Timeout.add_seconds (5, tick_freshness);
         _started = true;
@@ -270,7 +265,6 @@ public class WifiViewModel : GLib.Object {
 
         search_text = normalized;
         search_active = search_text.length > 0;
-        notify_property ("search-active");
         rebuild_items ();
     }
 
@@ -292,7 +286,6 @@ public class WifiViewModel : GLib.Object {
             schedule_rebuild ();
         } catch (GLib.Error e) {
             scanning = false;
-            notify_property ("scanning");
             error (e.message);
             rebuild ();
         }
@@ -337,6 +330,28 @@ public class WifiViewModel : GLib.Object {
         try {
             yield service.connect_network (network, password, username);
             Logger.info ("WifiViewModel", "connect_network returned successfully for: %s", network.ssid);
+
+            // For saved connections with no new password, wait briefly for
+            // NM to process the async auth result.
+            if (network.saved_connection != null && (password == null || password.length == 0)) {
+                for (int i = 0; i < 14; i++) {
+                    yield sleep_ms (500);
+                    if (network.is_connected) {
+                        Logger.info ("WifiViewModel", "Connection confirmed for: %s", network.ssid);
+                        return;
+                    }
+                    if (network.connection_failed) {
+                        Logger.warn ("WifiViewModel", "Connection failed for %s: saved credentials rejected", network.ssid);
+                        throw new NetworkManagerServiceError.CONNECTION_FAILED (
+                            "Authentication failed. The saved password may have changed."
+                        );
+                    }
+                }
+                Logger.warn ("WifiViewModel", "Connection timed out (async) for: %s", network.ssid);
+                throw new NetworkManagerServiceError.CONNECTION_FAILED (
+                    "Connection timed out. The saved password may be incorrect."
+                );
+            }
         } catch (GLib.Error e) {
             Logger.warn ("WifiViewModel", "connect_network failed for %s: %s", network.ssid, e.message);
             _manual_connecting = false;
@@ -347,6 +362,14 @@ public class WifiViewModel : GLib.Object {
             }
             throw e;
         }
+    }
+
+    private async void sleep_ms (uint ms) {
+        Timeout.add (ms, () => {
+            sleep_ms.callback ();
+            return Source.REMOVE;
+        });
+        yield;
     }
 
     /**
@@ -692,7 +715,6 @@ public class WifiViewModel : GLib.Object {
             network.saved_connection = connection as NM.RemoteConnection;
             if (network.is_connected) {
                 last_successful_network = network.ssid;
-                notify_property ("last-successful-network");
             }
         }
     }
@@ -753,20 +775,6 @@ public class WifiViewModel : GLib.Object {
 
         captive_portal = connectivity == NM.ConnectivityState.PORTAL;
         connectivity_text = service.connectivity_label;
-        notify_property ("captive-portal");
-        notify_property ("connectivity-text");
-    }
-
-    /**
-     * Update connectivity state and portal detection.
-     */
-    private void update_connectivity_state () {
-        Logger.debug ("WifiViewModel", "Updating connectivity state");
-        var connectivity = service.connectivity;
-        captive_portal = connectivity == NM.ConnectivityState.PORTAL;
-        connectivity_text = service.connectivity_label;
-        notify_property ("captive-portal");
-        notify_property ("connectivity-text");
     }
 
     /**
@@ -796,7 +804,6 @@ public class WifiViewModel : GLib.Object {
      */
     private void apply_freshness () {
         scan_freshness = WifiUtils.format_scan_age (freshest_scan);
-        notify_property ("scan-freshness");
     }
 
     /**
@@ -876,22 +883,19 @@ public class WifiViewModel : GLib.Object {
         items.splice (0, items.get_n_items (), new_items);
 
         bool now_has_connected = connected.length > 0;
-        if (has_connected_network != now_has_connected) {
-            has_connected_network = now_has_connected;
-            notify_property ("has-connected-network");
-        }
+            if (has_connected_network != now_has_connected) {
+                has_connected_network = now_has_connected;
+            }
 
-        bool now_has_networks = total_scan_results > 0 || now_has_connected;
-        if (has_networks != now_has_networks) {
-            has_networks = now_has_networks;
-            notify_property ("has-networks");
-        }
+            bool now_has_networks = total_scan_results > 0 || now_has_connected;
+            if (has_networks != now_has_networks) {
+                has_networks = now_has_networks;
+            }
 
-        bool now_has_visible_networks = visible_scan_results > 0;
-        if (has_visible_networks != now_has_visible_networks) {
-            has_visible_networks = now_has_visible_networks;
-            notify_property ("has-visible-networks");
-        }
+            bool now_has_visible_networks = visible_scan_results > 0;
+            if (has_visible_networks != now_has_visible_networks) {
+                has_visible_networks = now_has_visible_networks;
+            }
     }
 
     /**
