@@ -27,7 +27,7 @@ public class WifiNetworkRow : Gtk.Box {
     private Gtk.Label primary_status_label;
     private Gtk.Label security_status_label;
 
-    private unowned WifiNetwork? network;
+    private WifiNetwork? network;
     private GLib.Binding? signal_binding = null;
     private ulong connected_id = 0;
     private ulong saved_id = 0;
@@ -41,6 +41,19 @@ public class WifiNetworkRow : Gtk.Box {
     private ulong dns_id = 0;
     private ulong warning_id = 0;
     private ulong health_id = 0;
+
+    /**
+     * Dispose — ensures signal handlers and bindings are cleaned up
+     * while the row and network are still in a valid state.
+     *
+     * This is the correct GObject lifecycle stage for dropping references
+     * and disconnecting signals. We call unlink_network() to ensure
+     * all GObject-level connections are severed.
+     */
+    public override void dispose () {
+        unlink_network ();
+        base.dispose ();
+    }
 
     /**
      * The currently displayed network, or null if the row is empty.
@@ -176,7 +189,7 @@ public class WifiNetworkRow : Gtk.Box {
      */
     public void set_item (WifiListItem item) {
         Logger.debug ("NetworkRow", "Setting item: kind=%s", item.kind.to_string ());
-        disconnect_network ();
+        unlink_network ();
         set_hero (false);
 
         network = item.network;
@@ -204,43 +217,77 @@ public class WifiNetworkRow : Gtk.Box {
     }
 
     /**
-     * Disconnect all property change handlers from the current
-     * network.
+     * Disconnect all notify signal handlers and property binding
+     * from the current WifiNetwork object.
+     *
+     * This does NOT disconnect the Wi-Fi connection — it only
+     * cleans up GObject signal registrations so the row can be
+     * safely destroyed or reused.
+     *
+     * Since network is an owned reference, it is guaranteed to be valid
+     * during SignalHandler.disconnect. Breaking connections here prevents
+     * redundant signal traffic and helps break reference cycles that
+     * might involve property bindings.
      */
-    private void disconnect_network () {
+    public void unlink_network () {
         if (network == null) {
             return;
+        }
+
+        if (connected_id != 0) {
+            SignalHandler.disconnect (network, connected_id);
+            connected_id = 0;
+        }
+        if (saved_id != 0) {
+            SignalHandler.disconnect (network, saved_id);
+            saved_id = 0;
+        }
+        if (auto_connecting_id != 0) {
+            SignalHandler.disconnect (network, auto_connecting_id);
+            auto_connecting_id = 0;
+        }
+        if (connecting_text_id != 0) {
+            SignalHandler.disconnect (network, connecting_text_id);
+            connecting_text_id = 0;
+        }
+        if (bitrate_id != 0) {
+            SignalHandler.disconnect (network, bitrate_id);
+            bitrate_id = 0;
+        }
+        if (scan_age_id != 0) {
+            SignalHandler.disconnect (network, scan_age_id);
+            scan_age_id = 0;
+        }
+        if (signal_dbm_id != 0) {
+            SignalHandler.disconnect (network, signal_dbm_id);
+            signal_dbm_id = 0;
+        }
+        if (ip_address_id != 0) {
+            SignalHandler.disconnect (network, ip_address_id);
+            ip_address_id = 0;
+        }
+        if (gateway_id != 0) {
+            SignalHandler.disconnect (network, gateway_id);
+            gateway_id = 0;
+        }
+        if (dns_id != 0) {
+            SignalHandler.disconnect (network, dns_id);
+            dns_id = 0;
+        }
+        if (warning_id != 0) {
+            SignalHandler.disconnect (network, warning_id);
+            warning_id = 0;
+        }
+        if (health_id != 0) {
+            SignalHandler.disconnect (network, health_id);
+            health_id = 0;
         }
 
         if (signal_binding != null) {
             signal_binding.unbind ();
             signal_binding = null;
         }
-        if (connected_id != 0) SignalHandler.disconnect (network, connected_id);
-        if (saved_id != 0) SignalHandler.disconnect (network, saved_id);
-        if (auto_connecting_id != 0) SignalHandler.disconnect (network, auto_connecting_id);
-        if (connecting_text_id != 0) SignalHandler.disconnect (network, connecting_text_id);
-        if (bitrate_id != 0) SignalHandler.disconnect (network, bitrate_id);
-        if (scan_age_id != 0) SignalHandler.disconnect (network, scan_age_id);
-        if (signal_dbm_id != 0) SignalHandler.disconnect (network, signal_dbm_id);
-        if (ip_address_id != 0) SignalHandler.disconnect (network, ip_address_id);
-        if (gateway_id != 0) SignalHandler.disconnect (network, gateway_id);
-        if (dns_id != 0) SignalHandler.disconnect (network, dns_id);
-        if (warning_id != 0) SignalHandler.disconnect (network, warning_id);
-        if (health_id != 0) SignalHandler.disconnect (network, health_id);
 
-        connected_id = 0;
-        saved_id = 0;
-        auto_connecting_id = 0;
-        connecting_text_id = 0;
-        bitrate_id = 0;
-        scan_age_id = 0;
-        signal_dbm_id = 0;
-        ip_address_id = 0;
-        gateway_id = 0;
-        dns_id = 0;
-        warning_id = 0;
-        health_id = 0;
         network = null;
     }
 
@@ -261,6 +308,7 @@ public class WifiNetworkRow : Gtk.Box {
      * set both the label text and CSS style class.
      */
     private void update_status () {
+        if (network == null) return;
         var primary_status = network.primary_status;
         primary_status_label.label = primary_status;
         primary_status_label.visible = primary_status.length > 0;
@@ -285,6 +333,7 @@ public class WifiNetworkRow : Gtk.Box {
      * and subtitle to update the corresponding labels.
      */
     private void update_security () {
+        if (network == null) return;
         subtitle_label.label = network.subtitle;
         security_status_label.label = network.security_badge_text;
         security_status_label.visible = network.security_badge_text.length > 0;

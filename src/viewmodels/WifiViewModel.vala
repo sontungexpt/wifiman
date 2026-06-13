@@ -145,11 +145,58 @@ public class WifiViewModel : GLib.Object {
     private const uint AUTO_CONNECT_COOLDOWN_MS = 20000;
     private const uint DISCONNECT_COOLDOWN_MS = 30000;
     private bool _started = false;
+    private bool _hidden = false;
+    private bool _manual_connecting = false;
+    private string _manual_connecting_ssid = "";
+    private uint _manual_connect_timeout_id = 0;
+    private const uint MANUAL_CONNECT_TIMEOUT_MS = 120000;
+    private ulong service_changed_id = 0;
+    private ulong service_scan_started_id = 0;
+    private ulong service_scan_finished_id = 0;
+    private ulong service_error_id = 0;
 
     /**
      * Whether auto-reconnect to previously saved networks is enabled.
      */
     public bool auto_reconnect_enabled { get; set; default = true; }
+
+    /**
+     * Notify the ViewModel when the window becomes hidden or visible.
+     * While hidden, periodic timers (freshness, background scan) are
+     * skipped to save CPU.
+     */
+    public void set_window_hidden (bool hidden) {
+        _hidden = hidden;
+    }
+
+    /**
+     * Shut down the ViewModel: remove all timers and disconnect
+     * service signal handlers.  Call this before application quit
+     * to ensure the process can exit cleanly.
+     */
+    public void shutdown () {
+        Logger.info ("WifiViewModel", "Shutting down");
+        _started = false;
+        if (settle_scan_id != 0) {
+            Source.remove (settle_scan_id);
+            settle_scan_id = 0;
+        }
+        if (background_scan_id != 0) {
+            Source.remove (background_scan_id);
+            background_scan_id = 0;
+        }
+        if (freshness_timer_id != 0) {
+            Source.remove (freshness_timer_id);
+            freshness_timer_id = 0;
+        }
+        if (_manual_connect_timeout_id != 0) {
+            Source.remove (_manual_connect_timeout_id);
+            _manual_connect_timeout_id = 0;
+        }
+        if (service != null) {
+            service.shutdown ();
+        }
+    }
 
     /**
      * Initialise the ViewModel, connect service signals, and start
@@ -162,17 +209,17 @@ public class WifiViewModel : GLib.Object {
         this.service = service;
         items = new GLib.ListStore (typeof (WifiListItem));
 
-        service.changed.connect (() => schedule_rebuild ());
-        service.scan_started.connect (() => {
+        service_changed_id = service.changed.connect (() => schedule_rebuild ());
+        service_scan_started_id = service.scan_started.connect (() => {
             scanning = true;
             notify_property ("scanning");
         });
-        service.scan_finished.connect (() => {
+        service_scan_finished_id = service.scan_finished.connect (() => {
             scanning = false;
             notify_property ("scanning");
             schedule_rebuild ();
         });
-        service.error.connect ((message) => error (message));
+        service_error_id = service.error.connect ((message) => error (message));
 
         auto_connect_cooldowns = new GLib.HashTable<string, bool> (GLib.str_hash, GLib.str_equal);
         disconnect_cooldowns = new GLib.HashTable<string, bool> (GLib.str_hash, GLib.str_equal);
@@ -199,6 +246,10 @@ public class WifiViewModel : GLib.Object {
         if (freshness_timer_id != 0) {
             Source.remove (freshness_timer_id);
             freshness_timer_id = 0;
+        }
+        if (_manual_connect_timeout_id != 0) {
+            Source.remove (_manual_connect_timeout_id);
+            _manual_connect_timeout_id = 0;
         }
     }
 
@@ -257,9 +308,45 @@ public class WifiViewModel : GLib.Object {
      * @param username  Optional 802.1X username.
      * @throws Error if NetworkManager rejects the connection request.
      */
+    public void cancel_manual_connect () {
+        Logger.info ("WifiViewModel", "Manual connect cancelled for: %s", _manual_connecting_ssid);
+        _manual_connecting = false;
+        _manual_connecting_ssid = "";
+        if (_manual_connect_timeout_id != 0) {
+            Source.remove (_manual_connect_timeout_id);
+            _manual_connect_timeout_id = 0;
+        }
+    }
+
     public async void connect_network (WifiNetwork network, string? password = null, string? username = null) throws GLib.Error {
         Logger.info ("WifiViewModel", "Connecting to network: %s", network.ssid);
-        yield service.connect_network (network, password, username);
+
+        _manual_connecting = true;
+        _manual_connecting_ssid = network.ssid;
+        if (_manual_connect_timeout_id != 0) {
+            Source.remove (_manual_connect_timeout_id);
+        }
+        _manual_connect_timeout_id = Timeout.add (MANUAL_CONNECT_TIMEOUT_MS, () => {
+            Logger.warn ("WifiViewModel", "Manual connect timeout for: %s", _manual_connecting_ssid);
+            _manual_connecting = false;
+            _manual_connecting_ssid = "";
+            _manual_connect_timeout_id = 0;
+            return Source.REMOVE;
+        });
+
+        try {
+            yield service.connect_network (network, password, username);
+            Logger.info ("WifiViewModel", "connect_network returned successfully for: %s", network.ssid);
+        } catch (GLib.Error e) {
+            Logger.warn ("WifiViewModel", "connect_network failed for %s: %s", network.ssid, e.message);
+            _manual_connecting = false;
+            _manual_connecting_ssid = "";
+            if (_manual_connect_timeout_id != 0) {
+                Source.remove (_manual_connect_timeout_id);
+                _manual_connect_timeout_id = 0;
+            }
+            throw e;
+        }
     }
 
     /**
@@ -398,6 +485,30 @@ public class WifiViewModel : GLib.Object {
     private void try_auto_connect_all () {
         if (!_started || !auto_reconnect_enabled) return;
         Logger.debug ("WifiViewModel", "Checking networks for auto-connect");
+
+        if (_manual_connecting) {
+            if (_manual_connecting_ssid.length > 0) {
+                var network = networks_by_ssid.lookup (_manual_connecting_ssid);
+                if (network != null && (network.is_connected || network.connection_failed)) {
+                    Logger.info ("WifiViewModel", "Manual connect resolved for: %s (connected=%s, failed=%s)",
+                        _manual_connecting_ssid,
+                        network.is_connected.to_string (),
+                        network.connection_failed.to_string ());
+                    _manual_connecting = false;
+                    _manual_connecting_ssid = "";
+                    if (_manual_connect_timeout_id != 0) {
+                        Source.remove (_manual_connect_timeout_id);
+                        _manual_connect_timeout_id = 0;
+                    }
+                }
+            }
+            if (_manual_connecting) {
+                Logger.debug ("WifiViewModel", "Auto-connect skipped: manual connection in progress to %s",
+                    _manual_connecting_ssid);
+                return;
+            }
+        }
+
         if (has_active_wifi_connection ()) return;
         networks_by_ssid.foreach ((ssid, network) => {
             if (network.saved_connection == null) return;
@@ -442,7 +553,7 @@ public class WifiViewModel : GLib.Object {
         }
 
         background_scan_id = Timeout.add_seconds (45, () => {
-            if (service.wireless_enabled) {
+            if (!_hidden && service.wireless_enabled) {
                 scan.begin ();
             }
             return Source.CONTINUE;
@@ -696,7 +807,9 @@ public class WifiViewModel : GLib.Object {
      * @return Source.CONTINUE to keep the timer alive.
      */
     private bool tick_freshness () {
-        apply_freshness ();
+        if (!_hidden) {
+            apply_freshness ();
+        }
         return Source.CONTINUE;
     }
 
@@ -710,7 +823,6 @@ public class WifiViewModel : GLib.Object {
      */
     private void rebuild_items () {
         Logger.debug ("WifiViewModel", "Rebuilding display items");
-        items.remove_all ();
 
         var connected = new GLib.GenericArray<WifiNetwork> ();
         var available = new GLib.GenericArray<WifiNetwork> ();
@@ -740,8 +852,28 @@ public class WifiViewModel : GLib.Object {
         sort_networks (connected);
         sort_networks (available);
 
-        append_section ("Connected", connected);
-        append_section ("Available", available);
+        int nitems = 0;
+        if (connected.length > 0) {
+            nitems += 1 + (int) connected.length;
+        }
+        if (available.length > 0) {
+            nitems += 1 + (int) available.length;
+        }
+        var new_items = new GLib.Object[nitems];
+        int idx = 0;
+        if (connected.length > 0) {
+            new_items[idx++] = new WifiListItem.header ("Connected");
+            for (uint i = 0; i < connected.length; i++) {
+                new_items[idx++] = new WifiListItem.for_network (connected.get (i));
+            }
+        }
+        if (available.length > 0) {
+            new_items[idx++] = new WifiListItem.header ("Available");
+            for (uint i = 0; i < available.length; i++) {
+                new_items[idx++] = new WifiListItem.for_network (available.get (i));
+            }
+        }
+        items.splice (0, items.get_n_items (), new_items);
 
         bool now_has_connected = connected.length > 0;
         if (has_connected_network != now_has_connected) {
@@ -787,26 +919,6 @@ public class WifiViewModel : GLib.Object {
             return true;
         }
         return network.lower_ssid.contains (search_text);
-    }
-
-    /**
-     * Append a titled section of networks to the item list.
-     *
-     * Creates a WifiListItem.HEADER followed by WifiListItem.FOR_NETWORK
-     * entries for each network in the array.
-     *
-     * @param title     The section title.
-     * @param networks  The networks in this section.
-     */
-    private void append_section (string title, GLib.GenericArray<WifiNetwork> networks) {
-        if (networks.length == 0) {
-            return;
-        }
-
-        items.append (new WifiListItem.header (title));
-        for (uint i = 0; i < networks.length; i++) {
-            items.append (new WifiListItem.for_network (networks.get (i)));
-        }
     }
 
     /**

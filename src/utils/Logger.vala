@@ -178,12 +178,13 @@ namespace Logger {
      * the file handle is closed.
      */
     public static void shutdown () {
-        AtomicInt.set (ref _stopped, 1);
         _debug_on = false;
 
         if (_queue != null) {
             _queue.push (new LogEntry (INFO, "Logger", "Session ended"));
         }
+
+        AtomicInt.set (ref _stopped, 1);
 
         if (_writer != null) {
             _writer.join ();

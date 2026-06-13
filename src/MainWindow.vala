@@ -31,6 +31,10 @@ public class MainWindow : Gtk.ApplicationWindow {
     private Gtk.Label error_title;
     private Gtk.Label error_subtitle;
     private uint search_debounce_id = 0;
+    private bool _quitting = false;
+    private bool _rendering = false;
+    private bool _render_needed = false;
+    private bool _connect_dialog_active = false;
 
     /**
      * Construct the main window, initialise services and UI.
@@ -60,9 +64,28 @@ public class MainWindow : Gtk.ApplicationWindow {
         manager.scan.begin ();
 
         close_request.connect (() => {
-            set_visible (false);
+            quit_application ();
             return true;
         });
+
+        notify["visible"].connect (() => {
+            manager.set_window_hidden (!visible);
+        });
+    }
+
+    /**
+     * Fully shut down the application and exit the process.
+     *
+     * Cleans up timers and signal handlers, then calls
+     * Gtk.Application.quit() to destroy windows, remove the
+     * D-Bus name, and exit the main loop.
+     */
+    private void quit_application () {
+        if (_quitting) return;
+        _quitting = true;
+        Logger.info ("MainWindow", "Shutting down application");
+        manager.shutdown ();
+        application.quit ();
     }
 
     /**
@@ -71,7 +94,7 @@ public class MainWindow : Gtk.ApplicationWindow {
     public void toggle_visibility () {
         Logger.debug ("MainWindow", "Toggling window visibility, currently: %s", visible.to_string ());
         if (visible) {
-            set_visible (false);
+            quit_application ();
         } else {
             present ();
         }
@@ -521,10 +544,18 @@ public class MainWindow : Gtk.ApplicationWindow {
      * hero container and network list box accordingly.
      */
     private void render_networks () {
+        if (_rendering) {
+            _render_needed = true;
+            return;
+        }
+
         Logger.debug ("MainWindow", "Rendering networks");
         if (hero_container == null || network_list == null) {
             return;
         }
+
+        _rendering = true;
+        _render_needed = false;
 
         clear_container (hero_container);
         network_list.remove_all ();
@@ -571,6 +602,12 @@ public class MainWindow : Gtk.ApplicationWindow {
         }
 
         hero_container.visible = hero_container.get_first_child () != null;
+
+        _rendering = false;
+        if (_render_needed) {
+            _render_needed = false;
+            render_networks ();
+        }
     }
 
     /**
@@ -579,12 +616,11 @@ public class MainWindow : Gtk.ApplicationWindow {
      * @param box  The container to clear.
      */
     private void clear_container (Gtk.Box box) {
-        while (true) {
-            var child = box.get_first_child ();
-            if (child == null) {
-                break;
-            }
+        var child = box.get_first_child ();
+        while (child != null) {
+            var next = child.get_next_sibling ();
             box.remove (child);
+            child = next;
         }
     }
 
@@ -785,11 +821,14 @@ public class MainWindow : Gtk.ApplicationWindow {
 
         cancel.clicked.connect (() => dialog.close ());
 
-        void do_connect () {
+        connect.clicked.connect (() => {
             connect.sensitive = false;
             error_box.visible = false;
             var username = username_entry != null ? username_entry.text : null;
             manager.connect_network.begin (network, password_entry.text, username, (obj, res) => {
+                if (!_connect_dialog_active) {
+                    return;
+                }
                 try {
                     manager.connect_network.end (res);
                     dialog.close ();
@@ -799,10 +838,34 @@ public class MainWindow : Gtk.ApplicationWindow {
                     connect.sensitive = true;
                 }
             });
-        }
+        });
 
-        connect.clicked.connect (do_connect);
-        password_entry.activate.connect (do_connect);
+        password_entry.activate.connect (() => {
+            connect.sensitive = false;
+            error_box.visible = false;
+            var username = username_entry != null ? username_entry.text : null;
+            manager.connect_network.begin (network, password_entry.text, username, (obj, res) => {
+                if (!_connect_dialog_active) {
+                    return;
+                }
+                try {
+                    manager.connect_network.end (res);
+                    dialog.close ();
+                } catch (GLib.Error e) {
+                    error_label.label = e.message;
+                    error_box.visible = true;
+                    connect.sensitive = true;
+                }
+            });
+        });
+
+        _connect_dialog_active = true;
+        dialog.close_request.connect (() => {
+            _connect_dialog_active = false;
+            manager.cancel_manual_connect ();
+            dialog.destroy ();
+            return true;
+        });
 
         dialog.present ();
         password_entry.grab_focus ();
@@ -915,8 +978,12 @@ public class MainWindow : Gtk.ApplicationWindow {
             actions.append (forget);
         }
 
-        close.clicked.connect (() => dialog.close ());
+        close.clicked.connect (() => dialog.destroy ());
         box.append (actions);
+        dialog.close_request.connect (() => {
+            dialog.destroy ();
+            return true;
+        });
         dialog.present ();
     }
 
