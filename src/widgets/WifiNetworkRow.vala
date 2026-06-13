@@ -43,35 +43,16 @@ public class WifiNetworkRow : Gtk.Box {
     private ulong health_id = 0;
 
     /**
-     * Destructor — ensures signal handlers and bindings are cleaned up
-     * if the row is destroyed without going through render_networks()
-     * (e.g. during application shutdown).
+     * Dispose — ensures signal handlers and bindings are cleaned up
+     * while the row and network are still in a valid state.
      *
-     * During GObject finalization, g_signal_connect_object's weak-ref
-     * mechanism has already disconnected signal handlers from the
-     * WifiNetwork.  We just need to clear the handler IDs and clean
-     * up the property binding without calling SignalHandler.disconnect
-     * (which would hit the already-removed handlers).
+     * This is the correct GObject lifecycle stage for dropping references
+     * and disconnecting signals. We call unlink_network() to ensure
+     * all GObject-level connections are severed.
      */
-    ~WifiNetworkRow () {
-        if (network == null) return;
-        connected_id = 0;
-        saved_id = 0;
-        auto_connecting_id = 0;
-        connecting_text_id = 0;
-        bitrate_id = 0;
-        scan_age_id = 0;
-        signal_dbm_id = 0;
-        ip_address_id = 0;
-        gateway_id = 0;
-        dns_id = 0;
-        warning_id = 0;
-        health_id = 0;
-        if (signal_binding != null) {
-            signal_binding.unbind ();
-            signal_binding = null;
-        }
-        network = null;
+    public override void dispose () {
+        unlink_network ();
+        base.dispose ();
     }
 
     /**
@@ -241,46 +222,72 @@ public class WifiNetworkRow : Gtk.Box {
      *
      * This does NOT disconnect the Wi-Fi connection — it only
      * cleans up GObject signal registrations so the row can be
-     * safely destroyed.
+     * safely destroyed or reused.
      *
-     * Signal handlers connected with `.connect()` use g_signal_connect_object,
-     * which puts closures in the target (row)'s closure array.  When the row
-     * is finalized, closure_array_destroy_all(row) auto-disconnects from the
-     * network while the network field is still valid (destructor runs later).
-     * Manual SignalHandler.disconnect is therefore unnecessary and is not used
-     * here — it would risk a use-after-free if the network is freed between
-     * the disconnect call and the network = null assignment.
+     * Since network is an owned reference, it is guaranteed to be valid
+     * during SignalHandler.disconnect. Breaking connections here prevents
+     * redundant signal traffic and helps break reference cycles that
+     * might involve property bindings.
      */
     public void unlink_network () {
         if (network == null) {
             return;
         }
 
-        connected_id = 0;
-        saved_id = 0;
-        auto_connecting_id = 0;
-        connecting_text_id = 0;
-        bitrate_id = 0;
-        scan_age_id = 0;
-        signal_dbm_id = 0;
-        ip_address_id = 0;
-        gateway_id = 0;
-        dns_id = 0;
-        warning_id = 0;
-        health_id = 0;
+        if (connected_id != 0) {
+            SignalHandler.disconnect (network, connected_id);
+            connected_id = 0;
+        }
+        if (saved_id != 0) {
+            SignalHandler.disconnect (network, saved_id);
+            saved_id = 0;
+        }
+        if (auto_connecting_id != 0) {
+            SignalHandler.disconnect (network, auto_connecting_id);
+            auto_connecting_id = 0;
+        }
+        if (connecting_text_id != 0) {
+            SignalHandler.disconnect (network, connecting_text_id);
+            connecting_text_id = 0;
+        }
+        if (bitrate_id != 0) {
+            SignalHandler.disconnect (network, bitrate_id);
+            bitrate_id = 0;
+        }
+        if (scan_age_id != 0) {
+            SignalHandler.disconnect (network, scan_age_id);
+            scan_age_id = 0;
+        }
+        if (signal_dbm_id != 0) {
+            SignalHandler.disconnect (network, signal_dbm_id);
+            signal_dbm_id = 0;
+        }
+        if (ip_address_id != 0) {
+            SignalHandler.disconnect (network, ip_address_id);
+            ip_address_id = 0;
+        }
+        if (gateway_id != 0) {
+            SignalHandler.disconnect (network, gateway_id);
+            gateway_id = 0;
+        }
+        if (dns_id != 0) {
+            SignalHandler.disconnect (network, dns_id);
+            dns_id = 0;
+        }
+        if (warning_id != 0) {
+            SignalHandler.disconnect (network, warning_id);
+            warning_id = 0;
+        }
+        if (health_id != 0) {
+            SignalHandler.disconnect (network, health_id);
+            health_id = 0;
+        }
 
-        // Unbind the property binding — this uses g_signal_connect_data (not
-        // g_signal_connect_object), so GBinding's signal handlers are NOT in
-        // the row's closure array and must be removed manually.  The network
-        // is alive here because the row still holds a ref.
         if (signal_binding != null) {
             signal_binding.unbind ();
             signal_binding = null;
         }
 
-        // Drop the row's ref on the network.  If this is the last ref, the
-        // network is finalized and g_signal_handlers_destroy removes our
-        // notify handlers, invalidating closures from the row's array.
         network = null;
     }
 
@@ -301,6 +308,7 @@ public class WifiNetworkRow : Gtk.Box {
      * set both the label text and CSS style class.
      */
     private void update_status () {
+        if (network == null) return;
         var primary_status = network.primary_status;
         primary_status_label.label = primary_status;
         primary_status_label.visible = primary_status.length > 0;
@@ -325,6 +333,7 @@ public class WifiNetworkRow : Gtk.Box {
      * and subtitle to update the corresponding labels.
      */
     private void update_security () {
+        if (network == null) return;
         subtitle_label.label = network.subtitle;
         security_status_label.label = network.security_badge_text;
         security_status_label.visible = network.security_badge_text.length > 0;

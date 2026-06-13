@@ -32,6 +32,9 @@ public class MainWindow : Gtk.ApplicationWindow {
     private Gtk.Label error_subtitle;
     private uint search_debounce_id = 0;
     private bool _quitting = false;
+    private bool _rendering = false;
+    private bool _render_needed = false;
+    private bool _connect_dialog_active = false;
 
     /**
      * Construct the main window, initialise services and UI.
@@ -541,12 +544,19 @@ public class MainWindow : Gtk.ApplicationWindow {
      * hero container and network list box accordingly.
      */
     private void render_networks () {
+        if (_rendering) {
+            _render_needed = true;
+            return;
+        }
+
         Logger.debug ("MainWindow", "Rendering networks");
         if (hero_container == null || network_list == null) {
             return;
         }
 
-        disconnect_list_rows (network_list);
+        _rendering = true;
+        _render_needed = false;
+
         clear_container (hero_container);
         network_list.remove_all ();
 
@@ -592,6 +602,12 @@ public class MainWindow : Gtk.ApplicationWindow {
         }
 
         hero_container.visible = hero_container.get_first_child () != null;
+
+        _rendering = false;
+        if (_render_needed) {
+            _render_needed = false;
+            render_networks ();
+        }
     }
 
     /**
@@ -600,28 +616,11 @@ public class MainWindow : Gtk.ApplicationWindow {
      * @param box  The container to clear.
      */
     private void clear_container (Gtk.Box box) {
-        while (true) {
-            var child = box.get_first_child ();
-            if (child == null) {
-                break;
-            }
-            var wifi_row = child as WifiNetworkRow;
-            if (wifi_row != null) {
-                wifi_row.unlink_network ();
-            }
+        var child = box.get_first_child ();
+        while (child != null) {
+            var next = child.get_next_sibling ();
             box.remove (child);
-        }
-    }
-
-    private void disconnect_list_rows (Gtk.ListBox list) {
-        for (int i = 0; ; i++) {
-            var row = list.get_row_at_index (i);
-            if (row == null) break;
-            var child = row.get_child ();
-            var wifi_row = child as WifiNetworkRow;
-            if (wifi_row != null) {
-                wifi_row.unlink_network ();
-            }
+            child = next;
         }
     }
 
@@ -822,11 +821,14 @@ public class MainWindow : Gtk.ApplicationWindow {
 
         cancel.clicked.connect (() => dialog.close ());
 
-        void do_connect () {
+        connect.clicked.connect (() => {
             connect.sensitive = false;
             error_box.visible = false;
             var username = username_entry != null ? username_entry.text : null;
             manager.connect_network.begin (network, password_entry.text, username, (obj, res) => {
+                if (!_connect_dialog_active) {
+                    return;
+                }
                 try {
                     manager.connect_network.end (res);
                     dialog.close ();
@@ -836,10 +838,33 @@ public class MainWindow : Gtk.ApplicationWindow {
                     connect.sensitive = true;
                 }
             });
-        }
+        });
 
-        connect.clicked.connect (do_connect);
-        password_entry.activate.connect (do_connect);
+        password_entry.activate.connect (() => {
+            connect.sensitive = false;
+            error_box.visible = false;
+            var username = username_entry != null ? username_entry.text : null;
+            manager.connect_network.begin (network, password_entry.text, username, (obj, res) => {
+                if (!_connect_dialog_active) {
+                    return;
+                }
+                try {
+                    manager.connect_network.end (res);
+                    dialog.close ();
+                } catch (GLib.Error e) {
+                    error_label.label = e.message;
+                    error_box.visible = true;
+                    connect.sensitive = true;
+                }
+            });
+        });
+
+        _connect_dialog_active = true;
+        dialog.close_request.connect (() => {
+            _connect_dialog_active = false;
+            manager.cancel_manual_connect ();
+            return false;
+        });
 
         dialog.present ();
         password_entry.grab_focus ();

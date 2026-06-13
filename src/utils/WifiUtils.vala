@@ -153,11 +153,16 @@ public class WifiUtils : GLib.Object {
     /**
      * Convert a Bytes object to a valid UTF-8 SSID string.
      *
-     * Handles non-UTF-8 data via make_valid() and strips
-     * leading/trailing whitespace.
+     * SSID is arbitrary bytes — it is NOT guaranteed to be
+     * null-terminated or valid UTF-8.  This method:
+     *
+     *  1. Creates a properly null-terminated copy of the raw data.
+     *  2. Checks for valid UTF-8.
+     *  3. Falls back to escaped-hex representation for non-UTF-8
+     *     and non-printable bytes.
      *
      * @param ssid  The raw SSID bytes from NetworkManager.
-     * @return A clean UTF-8 string, or "" if null or empty.
+     * @return A clean display string, or "" if null or empty.
      */
     public static string ssid_to_string (GLib.Bytes? ssid) {
         if (ssid == null) {
@@ -169,7 +174,24 @@ public class WifiUtils : GLib.Object {
             return "";
         }
 
-        return ((string) data).make_valid ().strip ();
+        uint8[] nt = new uint8[data.length + 1];
+        GLib.Memory.copy (nt, data, data.length);
+        nt[data.length] = 0;
+
+        string raw = (string) nt;
+        if (raw.validate ()) {
+            return raw.strip ();
+        }
+
+        var sb = new StringBuilder ();
+        for (int i = 0; i < data.length; i++) {
+            if (data[i] >= 32 && data[i] <= 126) {
+                sb.append_c ((char) data[i]);
+            } else {
+                sb.append_printf ("\\x%02x", data[i]);
+            }
+        }
+        return sb.str;
     }
 
     /**

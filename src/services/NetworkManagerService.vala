@@ -242,18 +242,40 @@ public class NetworkManagerService : GLib.Object {
      */
     public async void connect_network (WifiNetwork network, string? password, string? username) throws GLib.Error {
         if (client == null || network.access_point == null || network.device == null) {
+            Logger.warn ("NetworkManager", "connect_network: prerequisites missing: client=%s ap=%s device=%s",
+                (client != null).to_string (),
+                (network.access_point != null).to_string (),
+                (network.device != null).to_string ());
             throw new NetworkManagerServiceError.CONNECTION_FAILED ("Network is no longer available");
         }
 
+        Logger.info ("NetworkManager", "connect_network: ssid='%s' has_password=%s has_username=%s saved=%s",
+            network.ssid,
+            (password != null && password.length > 0).to_string (),
+            (username != null && username.length > 0).to_string (),
+            (network.saved_connection != null).to_string ());
+
         var existing = network.saved_connection;
         if (existing != null) {
+            Logger.info ("NetworkManager", "Using saved connection for: %s", network.ssid);
             apply_secrets (existing, network, password, username);
+
+            if (password != null && password.length > 0) {
+                Logger.info ("NetworkManager", "Committing password update for saved connection");
+                yield existing.commit_changes_async (true, null);
+            }
+
+            Logger.info ("NetworkManager", "Calling activate_connection_async for: %s", network.ssid);
             yield client.activate_connection_async (existing, network.device, network.access_point.get_path (), null);
+            Logger.info ("NetworkManager", "activate_connection_async succeeded for: %s", network.ssid);
             return;
         }
 
+        Logger.info ("NetworkManager", "Creating new connection for: %s", network.ssid);
         var connection = create_connection (network, password, username);
+        Logger.info ("NetworkManager", "Calling add_and_activate_connection_async for: %s", network.ssid);
         yield client.add_and_activate_connection_async (connection, network.device, network.access_point.get_path (), null);
+        Logger.info ("NetworkManager", "add_and_activate_connection_async succeeded for: %s", network.ssid);
     }
 
     /**
