@@ -155,10 +155,30 @@ User clicks "Connect" (open network)
 
 User clicks "Connect" (secured, dialog)
   └─ show_connect_dialog ()
-       └─ dialog "Connect" → manager.connect_network.begin (password)
-            └─ service.user_connect ()
-                 ├─ client.activate_connection_async ()  ← if saved
-                 └─ client.add_and_activate_connection_async ()  ← if new
+       ├─ _connect_dialog_active = true
+       ├─ password_entry.activate  →  manager.connect_network.begin (password)
+       │    └─ async callback:
+       │         ├─ !_connect_dialog_active?  →  return  (dialog was closed)
+       │         ├─ success → dialog.destroy ()
+       │         └─ error → show error, re-enable button
+       ├─ connect.clicked  →  same flow
+       ├─ close_request:
+       │    ├─ _connect_dialog_active = false
+       │    ├─ manager.cancel_manual_connect ()
+       │    │    ├─ _manual_connecting = false
+       │    │    └─ Source.remove (_manual_connect_timeout_id)
+       │    ├─ dialog.destroy ()
+       │    └─ return true  (prevents default hide-only behavior)
+       └─ cancel.clicked  →  dialog.close ()  →  close_request fires
+
+User clicks "Connect" (secured, dialog)
+  └─ dialog "Connect" → manager.connect_network.begin (password)
+       ├─ _manual_connecting = true
+       ├─ _manual_connect_timeout_id = Timeout.add (120s, clear flags)
+       └─ service.user_connect ()
+            ├─ existing saved?  →  apply_secrets + commit_changes_async
+            │                       →  activate_connection_async
+            └─ new?  →  create_connection + add_and_activate_connection_async
 
 User clicks "Reconnect"
   └─ show_network_actions () → manager.reconnect_network.begin ()
@@ -196,5 +216,52 @@ User types in search
             └─ manager.set_search_text ()
                  └─ rebuild_items ()  ← filters existing data, no NM call
 ```
+
+## Dialog close flow (connect dialog)
+
+```
+User closes dialog (X button, Esc, or Cancel)
+       │
+       ▼
+  close_request fires
+       │
+       ├─ _connect_dialog_active = false  ← guards async callback
+       ├─ manager.cancel_manual_connect ()
+       │    ├─ _manual_connecting = false
+       │    ├─ _manual_connecting_ssid = ""
+       │    └─ Source.remove (_manual_connect_timeout_id)
+       ├─ dialog.destroy ()  ← frees GtkWindow resources
+       │                     (not just hide — avoids hidden window leak)
+       └─ return true  ← prevents default hide-only handler
+```
+
+Key: the `_connect_dialog_active` flag is checked in the async callback
+before touching dialog widgets. If the dialog was already closed, the
+callback returns early — no crash on destroyed widgets.
+
+## Manual connect guard
+
+```
+WifiViewModel.connect_network ()
+       │
+       ├─ _manual_connecting = true
+       ├─ _manual_connecting_ssid = network.ssid
+       ├─ Timeout.add (120s, clear flags)  ← safety timeout
+       │
+       ├─ on success:
+       │    └─ try_auto_connect_all () detects is_connected → clears flags
+       │
+       ├─ on error:
+       │    ├─ clears flags immediately
+       │    └─ re-throws error
+       │
+       └─ during manual connect:
+            try_auto_connect_all () sees _manual_connecting → returns early
+            (no auto-connect races against user password flow)
+```
+
+The manual connect guard ensures that auto-connect cannot interfere with
+a user-initiated password-based connection attempt. When the dialog is
+dismissed, `cancel_manual_connect()` is called to release the guard.
 
 All connection-mutating calls go through `NetworkManagerService.user_*` methods, which are only reachable from explicit user UI actions.

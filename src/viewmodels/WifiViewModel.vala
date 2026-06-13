@@ -176,6 +176,7 @@ public class WifiViewModel : GLib.Object {
      */
     public void shutdown () {
         Logger.info ("WifiViewModel", "Shutting down");
+        _started = false;
         if (settle_scan_id != 0) {
             Source.remove (settle_scan_id);
             settle_scan_id = 0;
@@ -187,6 +188,10 @@ public class WifiViewModel : GLib.Object {
         if (freshness_timer_id != 0) {
             Source.remove (freshness_timer_id);
             freshness_timer_id = 0;
+        }
+        if (_manual_connect_timeout_id != 0) {
+            Source.remove (_manual_connect_timeout_id);
+            _manual_connect_timeout_id = 0;
         }
         if (service != null) {
             service.shutdown ();

@@ -863,7 +863,8 @@ public class MainWindow : Gtk.ApplicationWindow {
         dialog.close_request.connect (() => {
             _connect_dialog_active = false;
             manager.cancel_manual_connect ();
-            return false;
+            dialog.destroy ();
+            return true;
         });
 
         dialog.present ();
@@ -977,8 +978,12 @@ public class MainWindow : Gtk.ApplicationWindow {
             actions.append (forget);
         }
 
-        close.clicked.connect (() => dialog.close ());
+        close.clicked.connect (() => dialog.destroy ());
         box.append (actions);
+        dialog.close_request.connect (() => {
+            dialog.destroy ();
+            return true;
+        });
         dialog.present ();
     }
 

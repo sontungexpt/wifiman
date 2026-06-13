@@ -58,7 +58,7 @@ still providing correct colours in light mode:
 | `text-primary` | `#111827` | `#f1f5f9` |
 | `text-secondary` | `#6b7280` | `#94a3b8` |
 | `text-tertiary` | `#4b5563` | `#d1d5db` |
-| `bg` / `surface` | `#f6f6f7` / `#ffffff` | `#090d16` / `#111827` |
+| `bg` / `surface` | `#f4f5f6` / `#ffffff` | `#090d16` / `#111827` |
 | `accent` | `#3584e4` | `#38bdf8` |
 | `warning` | `#d97706` | (from theme) |
 | `success` | `#059669` | (from theme) |
@@ -129,6 +129,24 @@ Then click the Waybar icon to start the fresh binary.
   connection is never disrupted automatically
 - See `docs/architecture.md` for module responsibilities, features, and roadmap
 - See `docs/changelog/` for dated records of session changes
+
+## Recent fixes (2026-06-13)
+
+- **Crash fix (Vala ABI bug):** `gtk_widget_set_sensitive` crash in connect
+  dialog caused by Vala generating broken 1-parameter signal wrappers for local
+  functions. Replaced with inline lambdas.
+- **Dialog window leak:** Both connect and detail dialogs are now **destroyed**
+  (not hidden) on close, preventing accumulation of hidden GtkWindow objects.
+- **Manual connect guard:** Prevents auto-connect from racing against
+  user-initiated password connections. Includes 120s safety timeout and
+  `cancel_manual_connect()` on dialog close.
+- **SSID corruption:** Non-UTF-8 SSIDs now show escaped-hex (`\xNN`) instead
+  of `U+FFFD` replacement characters.
+- **Password persistence:** Saved connection passwords are committed to
+  NetworkManager via `commit_changes_async` immediately after `apply_secrets`.
+- **Light mode color polish:** Refined surface hierarchy — window bg, headerbar,
+  dialog body, and dialog headerbar now have distinct tones instead of nearly
+  identical grays. Warmer overall palette, softer card shadows, lighter borders.
 
 ## Logging
 

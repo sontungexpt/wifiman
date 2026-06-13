@@ -80,6 +80,12 @@ docs/
     `border-radius: 0 12px 0 0`, zero padding/margin/border, hover background
   - HeaderBar's `.end` box padded to zero via
     `headerbar.dialog-headerbar .end { padding:0; margin:0; min-width:0 }`
+- Dialog windows are **destroyed** (not just hidden) on close:
+  - `show_connect_dialog` — `close_request` calls `dialog.destroy()` + returns `true`
+    (prevents default hide-only behavior). Also clears `_connect_dialog_active` and
+    calls `manager.cancel_manual_connect()`.
+  - `show_network_actions` — Close button and `close_request` both call
+    `dialog.destroy()`. Previously dialogs accumulated as hidden objects.
 - Search uses `Gtk.Editable.changed` signal (not `search_changed`) to fire on
   every keystroke, then debounced at 120ms via `queue_search_update()`
 - Renders network rows from the viewmodel
@@ -106,6 +112,15 @@ docs/
 - Refreshes derived runtime details for signal, speed, portal, IP, gateway, and
   DNS state
 - Forwards connect, reconnect, disconnect, forget, and scan actions
+- **Manual connect guard**: when `connect_network()` is called, sets
+  `_manual_connecting = true` and `_manual_connecting_ssid = network.ssid` with a
+  120-second safety timeout (`_manual_connect_timeout_id`). During manual connect,
+  `try_auto_connect_all()` is blocked — prevents auto-connect from racing against
+  a user-initiated password-based connection.
+  - `cancel_manual_connect()` clears flags + timeout, called from:
+    - dialog `close_request` (user dismisses dialog)
+    - manual connect timeout expiry (120s safety net)
+    - `try_auto_connect_all()` when the manual network resolves (connected or failed)
 - Auto-connects to saved networks detected in scan results with per-SSID cooldown
   (20s) and post-disconnect cooldown (30s) via Timeout-based tracking
 - Hard safety guarantee: auto-connect is blocked by three guards:
@@ -114,6 +129,8 @@ docs/
   - `has_active_wifi_connection()` — refuses auto-connect when any wifi
     connection is already active/activating
 - Live scan freshness label via 5-second periodic timer
+- `shutdown()` cleans up all timers (`settle_scan_id`, `background_scan_id`,
+  `freshness_timer_id`, `_manual_connect_timeout_id`) and sets `_started = false`
 
 ### `NetworkManagerService`
 
