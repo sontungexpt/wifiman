@@ -27,7 +27,7 @@ public class WifiNetworkRow : Gtk.Box {
     private Gtk.Label primary_status_label;
     private Gtk.Label security_status_label;
 
-    private unowned WifiNetwork? network;
+    private WifiNetwork? network;
     private GLib.Binding? signal_binding = null;
     private ulong connected_id = 0;
     private ulong saved_id = 0;
@@ -41,6 +41,38 @@ public class WifiNetworkRow : Gtk.Box {
     private ulong dns_id = 0;
     private ulong warning_id = 0;
     private ulong health_id = 0;
+
+    /**
+     * Destructor — ensures signal handlers and bindings are cleaned up
+     * if the row is destroyed without going through render_networks()
+     * (e.g. during application shutdown).
+     *
+     * During GObject finalization, g_signal_connect_object's weak-ref
+     * mechanism has already disconnected signal handlers from the
+     * WifiNetwork.  We just need to clear the handler IDs and clean
+     * up the property binding without calling SignalHandler.disconnect
+     * (which would hit the already-removed handlers).
+     */
+    ~WifiNetworkRow () {
+        if (network == null) return;
+        connected_id = 0;
+        saved_id = 0;
+        auto_connecting_id = 0;
+        connecting_text_id = 0;
+        bitrate_id = 0;
+        scan_age_id = 0;
+        signal_dbm_id = 0;
+        ip_address_id = 0;
+        gateway_id = 0;
+        dns_id = 0;
+        warning_id = 0;
+        health_id = 0;
+        if (signal_binding != null) {
+            signal_binding.unbind ();
+            signal_binding = null;
+        }
+        network = null;
+    }
 
     /**
      * The currently displayed network, or null if the row is empty.
@@ -176,7 +208,7 @@ public class WifiNetworkRow : Gtk.Box {
      */
     public void set_item (WifiListItem item) {
         Logger.debug ("NetworkRow", "Setting item: kind=%s", item.kind.to_string ());
-        disconnect_network ();
+        unlink_network ();
         set_hero (false);
 
         network = item.network;
@@ -204,30 +236,25 @@ public class WifiNetworkRow : Gtk.Box {
     }
 
     /**
-     * Disconnect all property change handlers from the current
-     * network.
+     * Disconnect all notify signal handlers and property binding
+     * from the current WifiNetwork object.
+     *
+     * This does NOT disconnect the Wi-Fi connection — it only
+     * cleans up GObject signal registrations so the row can be
+     * safely destroyed.
+     *
+     * Signal handlers connected with `.connect()` use g_signal_connect_object,
+     * which puts closures in the target (row)'s closure array.  When the row
+     * is finalized, closure_array_destroy_all(row) auto-disconnects from the
+     * network while the network field is still valid (destructor runs later).
+     * Manual SignalHandler.disconnect is therefore unnecessary and is not used
+     * here — it would risk a use-after-free if the network is freed between
+     * the disconnect call and the network = null assignment.
      */
-    private void disconnect_network () {
+    public void unlink_network () {
         if (network == null) {
             return;
         }
-
-        if (signal_binding != null) {
-            signal_binding.unbind ();
-            signal_binding = null;
-        }
-        if (connected_id != 0) SignalHandler.disconnect (network, connected_id);
-        if (saved_id != 0) SignalHandler.disconnect (network, saved_id);
-        if (auto_connecting_id != 0) SignalHandler.disconnect (network, auto_connecting_id);
-        if (connecting_text_id != 0) SignalHandler.disconnect (network, connecting_text_id);
-        if (bitrate_id != 0) SignalHandler.disconnect (network, bitrate_id);
-        if (scan_age_id != 0) SignalHandler.disconnect (network, scan_age_id);
-        if (signal_dbm_id != 0) SignalHandler.disconnect (network, signal_dbm_id);
-        if (ip_address_id != 0) SignalHandler.disconnect (network, ip_address_id);
-        if (gateway_id != 0) SignalHandler.disconnect (network, gateway_id);
-        if (dns_id != 0) SignalHandler.disconnect (network, dns_id);
-        if (warning_id != 0) SignalHandler.disconnect (network, warning_id);
-        if (health_id != 0) SignalHandler.disconnect (network, health_id);
 
         connected_id = 0;
         saved_id = 0;
@@ -241,6 +268,19 @@ public class WifiNetworkRow : Gtk.Box {
         dns_id = 0;
         warning_id = 0;
         health_id = 0;
+
+        // Unbind the property binding — this uses g_signal_connect_data (not
+        // g_signal_connect_object), so GBinding's signal handlers are NOT in
+        // the row's closure array and must be removed manually.  The network
+        // is alive here because the row still holds a ref.
+        if (signal_binding != null) {
+            signal_binding.unbind ();
+            signal_binding = null;
+        }
+
+        // Drop the row's ref on the network.  If this is the last ref, the
+        // network is finalized and g_signal_handlers_destroy removes our
+        // notify handlers, invalidating closures from the row's array.
         network = null;
     }
 

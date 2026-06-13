@@ -132,9 +132,24 @@ public class NetworkManagerService : GLib.Object {
 
     /**
      * Disconnect all signals on cleanup.
+     *
+     * g_signal_connect_object auto-disconnects during finalization,
+     * so no manual cleanup is needed here.
      */
     ~NetworkManagerService () {
-        disconnect_signals ();
+    }
+
+    /**
+     * Shut down the service.
+     *
+     * Signal handlers and NM object references are cleaned up by
+     * Vala-generated finalize code and the g_signal_connect_object
+     * weak-ref mechanism during finalization.  Manually freeing
+     * NM objects here would leave dangling pointers in the
+     * g_signal_connect_object internal tracking, causing
+     * g_signal_handler_disconnect: assertion failures at shutdown.
+     */
+    public void shutdown () {
     }
 
     /**
@@ -343,15 +358,20 @@ public class NetworkManagerService : GLib.Object {
     /**
      * Disconnect signal handlers for a Wi-Fi device that was removed.
      *
+     * When a device is removed by NetworkManager, the NM.DeviceWifi proxy
+     * passed to the device_removed callback may already be partially
+     * finalized.  Calling SignalHandler.disconnect on such an object
+     * triggers g_signal_handler_disconnect: assertion
+     * 'G_TYPE_CHECK_INSTANCE (instance)' failed.
+     *
+     * Instead we just drop our tracking.  GObject will clean up the
+     * signal handlers automatically when the proxy is eventually
+     * finalized by libnm.
+     *
      * @param device  The device that was removed.
      */
     private void disconnect_wifi_device (NM.DeviceWifi device) {
-        Logger.debug ("NetworkManager", "Disconnecting Wi-Fi device: %s", device.get_iface ());
-        var ids = wifi_signal_ids.lookup (device);
-        if (ids != null) {
-            disconnect_wifi_device_signals (device, ids);
-            wifi_signal_ids.remove (device);
-        }
+        wifi_signal_ids.remove (device);
     }
 
     /**
@@ -371,63 +391,15 @@ public class NetworkManagerService : GLib.Object {
      * Disconnect signal handler for an active connection that was
      * removed.
      *
+     * Same rationale as disconnect_wifi_device: the NM.ActiveConnection
+     * proxy passed by the signal may already be partially finalized.
+     * We just drop our tracking and let GObject clean up the signal
+     * handler during the proxy's eventual finalization.
+     *
      * @param active  The active connection that was removed.
      */
     private void disconnect_active_connection (NM.ActiveConnection active) {
-        Logger.debug ("NetworkManager", "Disconnecting active connection signal");
-        var id = active_signal_ids.lookup (active);
-        if (id != 0) {
-            SignalHandler.disconnect (active, id);
-            active_signal_ids.remove (active);
-        }
-    }
-
-    /**
-     * Disconnect all signal handlers to prevent memory leaks.
-     *
-     * Iterates over all stored signal IDs and disconnects them
-     * from the client, Wi-Fi devices, and active connections.
-     */
-    private void disconnect_signals () {
-        if (client == null) {
-            return;
-        }
-        Logger.debug ("NetworkManager", "Disconnecting all signals");
-
-        if (device_added_id != 0) client.disconnect (device_added_id);
-        if (device_removed_id != 0) client.disconnect (device_removed_id);
-        if (connection_added_id != 0) client.disconnect (connection_added_id);
-        if (connection_removed_id != 0) client.disconnect (connection_removed_id);
-        if (active_connection_added_id != 0) client.disconnect (active_connection_added_id);
-        if (active_connection_removed_id != 0) client.disconnect (active_connection_removed_id);
-        if (wireless_enabled_id != 0) client.disconnect (wireless_enabled_id);
-        if (connectivity_notify_id != 0) client.disconnect (connectivity_notify_id);
-
-        wifi_signal_ids.foreach ((device, ids) => {
-            disconnect_wifi_device_signals (device, ids);
-        });
-        wifi_signal_ids.remove_all ();
-
-        active_signal_ids.foreach ((active, id) => {
-            if (id != 0) {
-                SignalHandler.disconnect (active, id);
-            }
-        });
-        active_signal_ids.remove_all ();
-    }
-
-    /**
-     * Disconnect all stored signal IDs for a Wi-Fi device.
-     *
-     * @param device  The device whose signals should be disconnected.
-     * @param ids     The signal ID bundle for that device.
-     */
-    private void disconnect_wifi_device_signals (NM.DeviceWifi device, WifiDeviceSignals ids) {
-        if (ids.access_point_added_id != 0) SignalHandler.disconnect (device, ids.access_point_added_id);
-        if (ids.access_point_removed_id != 0) SignalHandler.disconnect (device, ids.access_point_removed_id);
-        if (ids.active_access_point_id != 0) SignalHandler.disconnect (device, ids.active_access_point_id);
-        if (ids.state_id != 0) SignalHandler.disconnect (device, ids.state_id);
-        if (ids.notify_id != 0) SignalHandler.disconnect (device, ids.notify_id);
+        active_signal_ids.remove (active);
     }
 
     /**

@@ -31,6 +31,7 @@ public class MainWindow : Gtk.ApplicationWindow {
     private Gtk.Label error_title;
     private Gtk.Label error_subtitle;
     private uint search_debounce_id = 0;
+    private bool _quitting = false;
 
     /**
      * Construct the main window, initialise services and UI.
@@ -60,9 +61,28 @@ public class MainWindow : Gtk.ApplicationWindow {
         manager.scan.begin ();
 
         close_request.connect (() => {
-            set_visible (false);
+            quit_application ();
             return true;
         });
+
+        notify["visible"].connect (() => {
+            manager.set_window_hidden (!visible);
+        });
+    }
+
+    /**
+     * Fully shut down the application and exit the process.
+     *
+     * Cleans up timers and signal handlers, then calls
+     * Gtk.Application.quit() to destroy windows, remove the
+     * D-Bus name, and exit the main loop.
+     */
+    private void quit_application () {
+        if (_quitting) return;
+        _quitting = true;
+        Logger.info ("MainWindow", "Shutting down application");
+        manager.shutdown ();
+        application.quit ();
     }
 
     /**
@@ -71,7 +91,7 @@ public class MainWindow : Gtk.ApplicationWindow {
     public void toggle_visibility () {
         Logger.debug ("MainWindow", "Toggling window visibility, currently: %s", visible.to_string ());
         if (visible) {
-            set_visible (false);
+            quit_application ();
         } else {
             present ();
         }
@@ -526,6 +546,7 @@ public class MainWindow : Gtk.ApplicationWindow {
             return;
         }
 
+        disconnect_list_rows (network_list);
         clear_container (hero_container);
         network_list.remove_all ();
 
@@ -584,7 +605,23 @@ public class MainWindow : Gtk.ApplicationWindow {
             if (child == null) {
                 break;
             }
+            var wifi_row = child as WifiNetworkRow;
+            if (wifi_row != null) {
+                wifi_row.unlink_network ();
+            }
             box.remove (child);
+        }
+    }
+
+    private void disconnect_list_rows (Gtk.ListBox list) {
+        for (int i = 0; ; i++) {
+            var row = list.get_row_at_index (i);
+            if (row == null) break;
+            var child = row.get_child ();
+            var wifi_row = child as WifiNetworkRow;
+            if (wifi_row != null) {
+                wifi_row.unlink_network ();
+            }
         }
     }
 
