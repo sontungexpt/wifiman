@@ -475,7 +475,13 @@ public class MainWindow : Gtk.ApplicationWindow {
             stack.visible_child_name = "error";
         });
         manager.connect_failed.connect ((network, message) => {
-            show_connect_dialog (network, message);
+            // Only create a new dialog if none is open yet (e.g. first
+            // failure).  If a dialog is already showing it handles the
+            // error via its own connect_failed handler attached in
+            // show_connect_dialog().
+            if (!_connect_dialog_active) {
+                show_connect_dialog (network, message);
+            }
         });
         update_state ();
     }
@@ -828,8 +834,23 @@ public class MainWindow : Gtk.ApplicationWindow {
         body.append (actions);
 
         bool connect_initiated = false;
+        uint success_close_id = 0;
+        ulong connect_failed_id = 0;
 
         cancel.clicked.connect (() => dialog.close ());
+
+        connect_failed_id = manager.connect_failed.connect ((failed_net, msg) => {
+            if (failed_net.ssid != network.ssid) {
+                return;
+            }
+            if (success_close_id != 0) {
+                Source.remove (success_close_id);
+                success_close_id = 0;
+            }
+            error_label.label = msg;
+            error_box.visible = true;
+            connect.sensitive = true;
+        });
 
         connect.clicked.connect (() => {
             connect.sensitive = false;
@@ -842,7 +863,13 @@ public class MainWindow : Gtk.ApplicationWindow {
                 try {
                     manager.connect_network.end (res);
                     connect_initiated = true;
-                    dialog.close ();
+                    success_close_id = Timeout.add (1500, () => {
+                        if (dialog.visible) {
+                            dialog.close ();
+                        }
+                        success_close_id = 0;
+                        return Source.REMOVE;
+                    });
                 } catch (GLib.Error e) {
                     error_label.label = e.message;
                     error_box.visible = true;
@@ -862,7 +889,13 @@ public class MainWindow : Gtk.ApplicationWindow {
                 try {
                     manager.connect_network.end (res);
                     connect_initiated = true;
-                    dialog.close ();
+                    success_close_id = Timeout.add (1500, () => {
+                        if (dialog.visible) {
+                            dialog.close ();
+                        }
+                        success_close_id = 0;
+                        return Source.REMOVE;
+                    });
                 } catch (GLib.Error e) {
                     error_label.label = e.message;
                     error_box.visible = true;
@@ -874,6 +907,7 @@ public class MainWindow : Gtk.ApplicationWindow {
         _connect_dialog_active = true;
         dialog.close_request.connect (() => {
             _connect_dialog_active = false;
+            manager.disconnect (connect_failed_id);
             if (!connect_initiated) {
                 manager.cancel_manual_connect ();
             }
@@ -882,7 +916,7 @@ public class MainWindow : Gtk.ApplicationWindow {
         });
 
         dialog.present ();
-        password_entry.grab_focus ();
+        dialog.set_focus (password_entry);
     }
 
     /**

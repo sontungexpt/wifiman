@@ -336,11 +336,27 @@ public class WifiViewModel : GLib.Object {
     public async void connect_network (WifiNetwork network, string? password = null, string? username = null) throws GLib.Error {
         Logger.info ("WifiViewModel", "Connecting to network: %s", network.ssid);
 
-        _manual_connecting = true;
-        _manual_connecting_ssid = network.ssid;
+        // Clear flags first so stale DEACTIVATED events from the previous
+        // connection attempt (fired during the async yield below) are ignored.
+        _manual_connecting = false;
+        _manual_connecting_ssid = "";
         if (_manual_connect_timeout_id != 0) {
             Source.remove (_manual_connect_timeout_id);
+            _manual_connect_timeout_id = 0;
         }
+
+        try {
+            yield service.connect_network (network, password, username);
+            Logger.info ("WifiViewModel", "connect_network returned successfully for: %s", network.ssid);
+        } catch (GLib.Error e) {
+            Logger.warn ("WifiViewModel", "connect_network failed for %s: %s", network.ssid, e.message);
+            throw e;
+        }
+
+        // Now that the new activation has been submitted, start monitoring
+        // for real failures on this connection.
+        _manual_connecting = true;
+        _manual_connecting_ssid = network.ssid;
         _manual_connect_timeout_id = Timeout.add (MANUAL_CONNECT_TIMEOUT_MS, () => {
             Logger.warn ("WifiViewModel", "Manual connect timeout for: %s", _manual_connecting_ssid);
             _manual_connecting = false;
@@ -348,33 +364,8 @@ public class WifiViewModel : GLib.Object {
             _manual_connect_timeout_id = 0;
             return Source.REMOVE;
         });
-
-        try {
-            yield service.connect_network (network, password, username);
-            Logger.info ("WifiViewModel", "connect_network returned successfully for: %s", network.ssid);
-        } catch (GLib.Error e) {
-            Logger.warn ("WifiViewModel", "connect_network failed for %s: %s", network.ssid, e.message);
-            _manual_connecting = false;
-            _manual_connecting_ssid = "";
-            if (_manual_connect_timeout_id != 0) {
-                Source.remove (_manual_connect_timeout_id);
-                _manual_connect_timeout_id = 0;
-            }
-            throw e;
-        }
     }
 
-    /**
-     * Disconnect and reconnect to a network.
-     *
-     * Useful for refreshing a stale connection without closing the
-     * dialog.  Async, does not block the UI thread.
-     *
-     * @param network   The network to reconnect.
-     * @param password  Optional new password.
-     * @param username  Optional new 802.1X username.
-     * @throws Error if NetworkManager rejects the request.
-     */
     /**
      * Handle a connection failure from the service layer.
      *
@@ -402,6 +393,17 @@ public class WifiViewModel : GLib.Object {
         }
     }
 
+    /**
+     * Disconnect and reconnect to a network.
+     *
+     * Useful for refreshing a stale connection without closing the
+     * dialog.  Async, does not block the UI thread.
+     *
+     * @param network   The network to reconnect.
+     * @param password  Optional new password.
+     * @param username  Optional new 802.1X username.
+     * @throws Error if NetworkManager rejects the request.
+     */
     public async void reconnect_network (WifiNetwork network, string? password = null, string? username = null) throws GLib.Error {
         Logger.info ("WifiViewModel", "Reconnecting network: %s", network.ssid);
         if (network.active_connection != null) {

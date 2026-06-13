@@ -268,15 +268,24 @@ public class NetworkManagerService : GLib.Object {
 
         var existing = network.saved_connection;
         if (existing != null) {
-            Logger.info ("NetworkManager", "Using saved connection for: %s", network.ssid);
-            apply_secrets (existing, network, password, username);
-
             if (password != null && password.length > 0) {
-                Logger.info ("NetworkManager", "Committing password update for saved connection");
-                yield existing.commit_changes_async (true, null);
+                // Create a fresh connection with the new password and
+                // activate it directly.  Bypasses NM's internal connection
+                // cache, which may hold the old password after an update.
+                Logger.info ("NetworkManager", "Creating new connection with updated password for: %s", network.ssid);
+                var new_conn = create_connection (network, password, username);
+                yield client.add_and_activate_connection_async (new_conn, network.device, network.access_point.get_path (), null);
+                Logger.info ("NetworkManager", "add_and_activate_connection_async succeeded for: %s", network.ssid);
+                // Remove the old saved connection now that it is superseded.
+                try {
+                    yield existing.delete_async (null);
+                } catch (GLib.Error e) {
+                    Logger.warn ("NetworkManager", "Failed to delete old saved connection: %s", e.message);
+                }
+                return;
             }
 
-            Logger.info ("NetworkManager", "Calling activate_connection_async for: %s", network.ssid);
+            Logger.info ("NetworkManager", "Using saved connection for: %s", network.ssid);
             yield client.activate_connection_async (existing, network.device, network.access_point.get_path (), null);
             Logger.info ("NetworkManager", "activate_connection_async succeeded for: %s", network.ssid);
             return;
