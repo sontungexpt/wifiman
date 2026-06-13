@@ -1,6 +1,12 @@
 using Gtk;
-using GLib;
 
+/**
+ * Main application window for the Wi-Fi manager.
+ *
+ * Builds and manages the full UI: header bar, network list,
+ * status strip, portal banner, and dialogs.  Binds to a
+ * WifiViewModel to reflect network state changes.
+ */
 public class MainWindow : Gtk.ApplicationWindow {
     private WifiViewModel manager;
     private Gtk.Button refresh_button;
@@ -26,6 +32,15 @@ public class MainWindow : Gtk.ApplicationWindow {
     private Gtk.Label error_subtitle;
     private uint search_debounce_id = 0;
 
+    /**
+     * Construct the main window, initialise services and UI.
+     *
+     * Creates a NetworkManagerService and WifiViewModel, builds
+     * the full interface, binds state signals, and starts the
+     * first scan.
+     *
+     * @param application  The owning Gtk.Application.
+     */
     public MainWindow (Gtk.Application application) {
         Object (
             application: application,
@@ -34,6 +49,7 @@ public class MainWindow : Gtk.ApplicationWindow {
             default_height: 680
         );
 
+        Logger.info ("MainWindow", "Initializing MainWindow");
         load_css ();
 
         var nm_service = new NetworkManagerService ();
@@ -49,7 +65,11 @@ public class MainWindow : Gtk.ApplicationWindow {
         });
     }
 
+    /**
+     * Toggle window visibility between shown and hidden.
+     */
     public void toggle_visibility () {
+        Logger.debug ("MainWindow", "Toggling window visibility, currently: %s", visible.to_string ());
         if (visible) {
             set_visible (false);
         } else {
@@ -57,7 +77,11 @@ public class MainWindow : Gtk.ApplicationWindow {
         }
     }
 
+    /**
+     * Load the application CSS from the GResource bundle.
+     */
     private void load_css () {
+        Logger.debug ("MainWindow", "Loading CSS");
         var provider = new Gtk.CssProvider ();
         provider.load_from_resource ("/io/github/sontungexpt/wifiman/style.css");
         Gtk.StyleContext.add_provider_for_display (
@@ -67,6 +91,12 @@ public class MainWindow : Gtk.ApplicationWindow {
         );
     }
 
+    /**
+     * Build the main user interface layout.
+     *
+     * Constructs the header bar, stack (loading/empty/error/results
+     * pages), and wires navigation.
+     */
     private void build_ui () {
         var root = new Gtk.Box (Gtk.Orientation.VERTICAL, 0);
         set_child (root);
@@ -108,18 +138,25 @@ public class MainWindow : Gtk.ApplicationWindow {
         stack.add_named (build_results_page (), "results");
     }
 
+    /**
+     * Build the popover menu with Wi-Fi toggle, colour scheme, and refresh.
+     *
+     * @return The configured Gtk.Popover.
+     */
     private Gtk.Popover build_menu_popover () {
         menu_popover = new Gtk.Popover ();
         if (this.has_css_class ("dark-mode"))
             menu_popover.add_css_class ("dark-mode");
 
-        // High-priority CSS to guarantee dark background on the popover surface
         try {
             var css = new Gtk.CssProvider ();
-            css.load_from_string (".dark-mode { background: #111827; border: none; outline: none; padding: 0; }");
+            css.load_from_string (
+                ".dark-mode { background: #111827; border: none; outline: none; padding: 0; } " +
+                "popover:not(.dark-mode) { background: #ffffff; border: none; outline: none; padding: 0; }"
+            );
             menu_popover.get_style_context().add_provider (css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
         } catch (GLib.Error e) {
-            warning ("Failed to load popover CSS: %s", e.message);
+            Logger.warn ("MainWindow", "Failed to load popover CSS override: %s", e.message);
         }
 
         var box = new Gtk.Box (Gtk.Orientation.VERTICAL, 12);
@@ -130,6 +167,9 @@ public class MainWindow : Gtk.ApplicationWindow {
         wifi_switch.active = manager.wireless_enabled;
         wifi_switch.notify["active"].connect (() => {
             manager.wireless_enabled = wifi_switch.active;
+            if (!wifi_switch.active) {
+                this.close ();
+            }
         });
         box.append (build_setting_row ("Wi-Fi", wifi_switch));
 
@@ -147,6 +187,13 @@ public class MainWindow : Gtk.ApplicationWindow {
         return menu_popover;
     }
 
+    /**
+     * Build a labelled row with a control widget for the popover.
+     *
+     * @param text     The label text.
+     * @param control  The widget to place to the right of the label.
+     * @return A horizontal Gtk.Box containing the label and control.
+     */
     private Gtk.Box build_setting_row (string text, Gtk.Widget control) {
         var row = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 12);
         var label = new Gtk.Label (text);
@@ -158,6 +205,12 @@ public class MainWindow : Gtk.ApplicationWindow {
         return row;
     }
 
+    /**
+     * Build radio buttons for system/light/dark colour scheme selection.
+     *
+     * @param app  The Application instance to read/save the scheme.
+     * @return A horizontal Gtk.Box with check buttons.
+     */
     private Gtk.Box build_color_scheme_radios (Application app) {
         var box = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 4);
         string current = app.load_color_scheme ();
@@ -189,6 +242,11 @@ public class MainWindow : Gtk.ApplicationWindow {
         return box;
     }
 
+    /**
+     * Sync the dark-mode CSS class to the popover surface.
+     *
+     * Should be called whenever the window's colour scheme changes.
+     */
     public void sync_popover_class () {
         if (menu_popover == null) return;
         if (this.has_css_class ("dark-mode"))
@@ -197,6 +255,11 @@ public class MainWindow : Gtk.ApplicationWindow {
             menu_popover.remove_css_class ("dark-mode");
     }
 
+    /**
+     * Build the loading spinner page shown during a scan.
+     *
+     * @return A Gtk.Widget displaying a spinner and "Scanning" text.
+     */
     private Gtk.Widget build_loading_page () {
         var box = new Gtk.Box (Gtk.Orientation.VERTICAL, 12);
         box.add_css_class ("state-page");
@@ -215,6 +278,11 @@ public class MainWindow : Gtk.ApplicationWindow {
         return box;
     }
 
+    /**
+     * Build the empty state page shown when no networks are found.
+     *
+     * @return A Gtk.Widget with an icon and "No Networks Found" text.
+     */
     private Gtk.Widget build_empty_page () {
         var box = new Gtk.Box (Gtk.Orientation.VERTICAL, 8);
         box.add_css_class ("state-page");
@@ -237,6 +305,11 @@ public class MainWindow : Gtk.ApplicationWindow {
         return box;
     }
 
+    /**
+     * Build the error state page shown on connection failures.
+     *
+     * @return A Gtk.Widget with a warning icon and error labels.
+     */
     private Gtk.Widget build_error_page () {
         var box = new Gtk.Box (Gtk.Orientation.VERTICAL, 8);
         box.add_css_class ("state-page");
@@ -261,6 +334,11 @@ public class MainWindow : Gtk.ApplicationWindow {
         return box;
     }
 
+    /**
+     * Build the results page with search, status strip, and network list.
+     *
+     * @return A scrolled Gtk.Widget containing the full results layout.
+     */
     private Gtk.Widget build_results_page () {
         var scrolled = new Gtk.ScrolledWindow ();
         scrolled.vexpand = true;
@@ -321,7 +399,6 @@ public class MainWindow : Gtk.ApplicationWindow {
 
         hero_container = new Gtk.Box (Gtk.Orientation.VERTICAL, 0);
         hero_container.hexpand = true;
-        hero_container.add_css_class ("hero-container");
         content_shell.append (hero_container);
 
         search_empty_box = new Gtk.Box (Gtk.Orientation.VERTICAL, 6);
@@ -340,10 +417,6 @@ public class MainWindow : Gtk.ApplicationWindow {
 
         content_shell.append (search_empty_box);
 
-        var network_panel = new Gtk.Box (Gtk.Orientation.VERTICAL, 0);
-        network_panel.hexpand = true;
-        network_panel.add_css_class ("network-panel");
-
         network_list = new Gtk.ListBox ();
         network_list.hexpand = true;
         network_list.selection_mode = Gtk.SelectionMode.NONE;
@@ -351,13 +424,19 @@ public class MainWindow : Gtk.ApplicationWindow {
         network_list.activate_on_single_click = true;
         network_list.row_activated.connect (on_row_activated);
         network_list.add_css_class ("network-listbox");
-        network_panel.append (network_list);
+        network_list.add_css_class ("network-panel");
 
-        content_shell.append (network_panel);
+        content_shell.append (network_list);
         scrolled.set_child (content_shell);
         return scrolled;
     }
 
+    /**
+     * Bind ViewModel state changes to UI updates.
+     *
+     * Connects notify signals on the WifiViewModel to the
+     * update_state and update_status_strip methods.
+     */
     private void bind_state () {
         manager.notify["scanning"].connect (update_state);
         manager.notify["has-networks"].connect (update_state);
@@ -375,7 +454,14 @@ public class MainWindow : Gtk.ApplicationWindow {
         update_state ();
     }
 
+    /**
+     * Update the visible stack page and refresh the network list.
+     *
+     * Decides which of loading/empty/error/results pages to show
+     * based on the current ViewModel state.
+     */
     private void update_state () {
+        Logger.debug ("MainWindow", "Updating state: scanning=%s, has_networks=%s", manager.scanning.to_string (), manager.has_networks.to_string ());
         refresh_button.sensitive = !manager.scanning;
         spinner.spinning = manager.scanning;
         spinner.visible = manager.scanning;
@@ -392,6 +478,12 @@ public class MainWindow : Gtk.ApplicationWindow {
         render_networks ();
     }
 
+    /**
+     * Update the status labels and portal banner.
+     *
+     * Reads scan_freshness, connectivity_text, and captive_portal
+     * from the ViewModel.
+     */
     private void update_status_strip () {
         if (scan_status_label == null || connectivity_status_label == null || portal_banner == null) {
             return;
@@ -402,7 +494,14 @@ public class MainWindow : Gtk.ApplicationWindow {
         portal_banner.visible = manager.captive_portal;
     }
 
+    /**
+     * Debounce search input and apply the filter after a short delay.
+     *
+     * Cancels any pending debounce timer and starts a new 120 ms
+     * timeout before calling set_search_text.
+     */
     private void queue_search_update () {
+        Logger.debug ("MainWindow", "Queueing search update");
         if (search_debounce_id != 0) {
             Source.remove (search_debounce_id);
             search_debounce_id = 0;
@@ -415,7 +514,14 @@ public class MainWindow : Gtk.ApplicationWindow {
         });
     }
 
+    /**
+     * Render the connected hero row and available network list.
+     *
+     * Iterates over the ViewModel's items list and populates the
+     * hero container and network list box accordingly.
+     */
     private void render_networks () {
+        Logger.debug ("MainWindow", "Rendering networks");
         if (hero_container == null || network_list == null) {
             return;
         }
@@ -467,6 +573,11 @@ public class MainWindow : Gtk.ApplicationWindow {
         hero_container.visible = hero_container.get_first_child () != null;
     }
 
+    /**
+     * Remove all children from a box container.
+     *
+     * @param box  The container to clear.
+     */
     private void clear_container (Gtk.Box box) {
         while (true) {
             var child = box.get_first_child ();
@@ -477,6 +588,12 @@ public class MainWindow : Gtk.ApplicationWindow {
         }
     }
 
+    /**
+     * Build a section header row for network list categories.
+     *
+     * @param title  The section title text.
+     * @return A non-activatable Gtk.ListBoxRow label.
+     */
     private Gtk.Widget build_section_row (string title) {
         var row = new Gtk.ListBoxRow ();
         row.selectable = false;
@@ -495,11 +612,17 @@ public class MainWindow : Gtk.ApplicationWindow {
         return row;
     }
 
+    /**
+     * Build a network list row widget for non-hero (non-connected) networks.
+     *
+     * @param item  The WifiListItem to render.
+     * @param hero  Whether to style as a hero row.
+     * @return A Gtk.ListBoxRow containing a WifiNetworkRow.
+     */
     private Gtk.Widget build_network_row (WifiListItem item, bool hero) {
         var row = new Gtk.ListBoxRow ();
         row.selectable = false;
         row.activatable = true;
-        row.add_css_class ("network-list-row");
 
         var widget = new WifiNetworkRow ();
         widget.set_item (item);
@@ -509,6 +632,12 @@ public class MainWindow : Gtk.ApplicationWindow {
         return row;
     }
 
+    /**
+     * Build the hero row for the currently connected network.
+     *
+     * @param item  The WifiListItem for the connected network.
+     * @return A WifiNetworkRow styled as a hero element.
+     */
     private Gtk.Widget build_hero_row (WifiListItem item) {
         var widget = new WifiNetworkRow ();
         widget.set_item (item);
@@ -524,7 +653,16 @@ public class MainWindow : Gtk.ApplicationWindow {
         return widget;
     }
 
+    /**
+     * Handle click on a network list row.
+     *
+     * Extracts the WifiNetwork from the activated row and
+     * delegates to activate_network.
+     *
+     * @param row  The activated Gtk.ListBoxRow.
+     */
     private void on_row_activated (Gtk.ListBoxRow row) {
+        Logger.info ("MainWindow", "Network row activated");
         var child = row.get_child ();
         var network_row = child as WifiNetworkRow;
         if (network_row == null || network_row.item_network == null) {
@@ -534,10 +672,20 @@ public class MainWindow : Gtk.ApplicationWindow {
         activate_network (network_row.item_network);
     }
 
+    /**
+     * Activate a network: show info, connect directly, or show password dialog.
+     *
+     * Decides the action based on whether the network is connected,
+     * saved, secured, or open.
+     *
+     * @param network  The network to act on.  If null, a warning is logged.
+     */
     private void activate_network (WifiNetwork? network) {
         if (network == null) {
+            Logger.warn ("MainWindow", "activate_network called with null network");
             return;
         }
+        Logger.info ("MainWindow", "Activating network: %s", network.ssid);
 
         if (network.is_connected || network.is_saved) {
             show_network_actions (network);
@@ -548,16 +696,36 @@ public class MainWindow : Gtk.ApplicationWindow {
         }
     }
 
+    /**
+     * Initiate connection to a network via the ViewModel.
+     *
+     * Async method, does not block the UI thread.  On failure the
+     * error page is shown.
+     *
+     * @param network   The network to connect to.
+     * @param password  Optional WPA password or 802.1X password.
+     * @param username  Optional 802.1X username.
+     */
     private async void connect_network (WifiNetwork network, string? password = null, string? username = null) {
         try {
+            Logger.info ("MainWindow", "Connecting to network: %s", network.ssid);
             yield manager.connect_network (network, password, username);
         } catch (GLib.Error e) {
+            Logger.warn ("MainWindow", "Failed to connect to '%s': %s", network.ssid, e.message);
             error_subtitle.label = e.message;
             stack.visible_child_name = "error";
         }
     }
 
+    /**
+     * Show a dialog prompting for password (and optionally username) to connect.
+     *
+     * For enterprise networks a username field is also displayed.
+     *
+     * @param network  The secured network to connect to.
+     */
     private void show_connect_dialog (WifiNetwork network) {
+        Logger.info ("MainWindow", "Showing connect dialog for: %s", network.ssid);
         var dialog = new Gtk.Window ();
         dialog.title = network.ssid;
         dialog.transient_for = this;
@@ -578,11 +746,14 @@ public class MainWindow : Gtk.ApplicationWindow {
         if (network.enterprise) {
             username_entry = new Gtk.Entry ();
             username_entry.placeholder_text = "Enter username";
+            username_entry.add_css_class ("dialog-input");
             body.append (build_dialog_field ("Username", username_entry));
         }
 
         var password_entry = new Gtk.PasswordEntry ();
         password_entry.placeholder_text = "Enter password";
+        password_entry.show_peek_icon = true;
+        password_entry.add_css_class ("dialog-input");
         body.append (build_dialog_field ("Password", password_entry));
 
         var error_box = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 8);
@@ -613,7 +784,8 @@ public class MainWindow : Gtk.ApplicationWindow {
         body.append (actions);
 
         cancel.clicked.connect (() => dialog.close ());
-        connect.clicked.connect (() => {
+
+        void do_connect () {
             connect.sensitive = false;
             error_box.visible = false;
             var username = username_entry != null ? username_entry.text : null;
@@ -627,13 +799,26 @@ public class MainWindow : Gtk.ApplicationWindow {
                     connect.sensitive = true;
                 }
             });
-        });
+        }
+
+        connect.clicked.connect (do_connect);
+        password_entry.activate.connect (do_connect);
 
         dialog.present ();
         password_entry.grab_focus ();
     }
 
+    /**
+     * Show a dialog with network details and action buttons.
+     *
+     * Displays SSID, security, band, signal, speed, IP, gateway,
+     * DNS, and scan freshness.  Offers Connect/Disconnect/Forget
+     * actions depending on the network state.
+     *
+     * @param network  The network to show details for.
+     */
     private void show_network_actions (WifiNetwork network) {
+        Logger.info ("MainWindow", "Showing network actions for: %s", network.ssid);
         var dialog = new Gtk.Window ();
         dialog.title = network.ssid;
         dialog.transient_for = this;
@@ -735,6 +920,12 @@ public class MainWindow : Gtk.ApplicationWindow {
         dialog.present ();
     }
 
+    /**
+     * Build a custom header bar for dialogs with a close button.
+     *
+     * @param dialog  The window to attach the titlebar to.
+     * @param title   The header title text.
+     */
     private void build_dialog_titlebar (Gtk.Window dialog, string title) {
         var header = new Gtk.HeaderBar ();
         header.show_title_buttons = false;
@@ -759,6 +950,13 @@ public class MainWindow : Gtk.ApplicationWindow {
         dialog.set_titlebar (header);
     }
 
+    /**
+     * Build a labelled input field for dialogs.
+     *
+     * @param label_text  The field label text.
+     * @param field       The input widget.
+     * @return A vertical Gtk.Box containing the label and field.
+     */
     private Gtk.Box build_dialog_field (string label_text, Gtk.Widget field) {
         var container = new Gtk.Box (Gtk.Orientation.VERTICAL, 6);
 
@@ -771,12 +969,20 @@ public class MainWindow : Gtk.ApplicationWindow {
         return container;
     }
 
+    /**
+     * Add a key-value row to the network details grid.
+     *
+     * @param grid   The Gtk.Grid to attach to.
+     * @param row    The grid row index.
+     * @param key    The field name label.
+     * @param value  The field value label (shows em dash if empty).
+     */
     private void add_detail_row (Gtk.Grid grid, int row, string key, string value) {
         var key_label = new Gtk.Label (key);
         key_label.xalign = 0.0f;
         key_label.add_css_class ("detail-key");
 
-        var value_label = new Gtk.Label (value.length > 0 ? value : "—");
+        var value_label = new Gtk.Label (value.length > 0 ? value : "\u2014");
         value_label.xalign = 0.0f;
         value_label.wrap = true;
         value_label.add_css_class ("detail-value");

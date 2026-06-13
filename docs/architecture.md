@@ -37,16 +37,20 @@ src/
   viewmodels/WifiViewModel.vala
                               UI-facing network state, sorting, filtering,
                               grouping, and action forwarding
+  widgets/SignalIcon.vala     Cairo-drawn Wi-Fi signal arcs (icon-theme independent)
   widgets/WifiNetworkRow.vala
                               Reusable GTK row used for network rendering
-  utils/WifiUtils.vala        SSID, security, and icon helper functions
+  utils/WifiUtils.vala        SSID, security, and channel helper functions
+  utils/Logger.vala           Async file logging with GLib integration
+                                and log rotation
 data/
   resources.gresource.xml     Resource manifest for CSS and UI assets
 style.css                    Theme-aware GTK CSS with @define-color variables
 docs/
   architecture.md            This file
   changelog/
-    2026-06-11.md            Session changes
+      2026-06-11.md            Session changes
+      2026-06-12.md            Async logger, Cairo SignalIcon, bitrate fix, binding
 ```
 
 ## Responsibilities
@@ -54,7 +58,8 @@ docs/
 ### `Application`
 
 - Owns the `Gtk.Application`
-- Handles activation and command-line `--version` and `--toggle`
+- Handles activation and command-line `--version`, `--toggle`, and `--debug`
+- Initializes `Logger` with `--debug` flag for file logging
 - Registers a `"toggle"` GAction for show/hide via CLI
 - Keeps startup minimal
 
@@ -120,6 +125,8 @@ docs/
 - Disconnects and forgets saved networks on request
 - Does not expose a saved-network list to the UI layer
 - Exposes the current connectivity state for portal / limited / full access
+- Tracks all signal handler IDs for cleanup in `disconnect_signals()`,
+  including `client.notify["connectivity"]` (`connectivity_notify_id`)
 
 ### `WifiNetwork`
 
@@ -127,7 +134,6 @@ docs/
 - Pre-computes `lower_ssid` on SSID set for O(1) case-insensitive search matching
 - Exposes computed properties for:
   - `subtitle`
-  - `signal_icon_name`
   - `primary_status` (including a "Previously saved" badge for known profiles)
   - `primary_status_style`
 - Tracks transient `auto_connecting` state with `connecting_status_text`
@@ -139,26 +145,87 @@ docs/
   - IP / gateway / DNS
   - warning and health text
 
+### `SignalIcon`
+
+- Custom `Gtk.DrawingArea` that draws Wi-Fi signal arcs with Cairo, bypassing
+  the icon theme entirely (fixes themes like Papirus-Dark where all
+  `network-wireless-signal-*-symbolic` names resolve to the same fallback icon)
+- Exposes an `int strength` property (0–100) that triggers `queue_draw()`
+  on change via `notify["strength"]` binding
+- Draws 4 concentric arcs (radii 4, 8, 12, 16) sweeping 225°→315° — the
+  classic Wi-Fi fan shape, respecting CSS color and opacity via
+  `Gtk.StyleContext.get_color()`
+- Arc center (`cy = height - 3`) is shifted up 3px from the widget bottom
+  so the visual center of the arcs aligns with the widget center, matching
+  the badge text baseline
+- Supports `.signal-icon` CSS class for theme integration and hero-network
+  color overrides
+
 ### `WifiNetworkRow`
 
-- Renders one network row
-- Handles header rows and network rows
+- Renders one network row with a `SignalIcon` widget for the signal indicator
+- Only handles network items (the HEADER branch was removed — unreachable)
 - Updates live when network properties change, including auto-connect status
 - Adds the hero styling for the connected network
 - Exposes a right-click action path for row menus and details
-- Renders compact metric pills for signal, speed, and freshness
+- Renders compact metric pills for signal and speed
+- `network.strength` is bound to `signal_icon.strength` via `GLib.Binding`
+  with `SYNC_CREATE` (no transform needed) — handles initial sync and
+  subsequent property changes automatically. The old `update_signal()` method
+  that manually set the strength before binding creation was removed as
+  redundant — `SYNC_CREATE` already copies the initial value.
+- Signal handlers for `security`, `frequency`, and `access-point-count`
+  are not connected — these properties are set once during AP discovery
+  and never change, making their handlers dead code.
+- Stores `network` as `unowned` to break the reference cycle: signal closures
+  on the WifiNetwork keep the row alive, but the row no longer keeps the
+  network alive. When `rebuild()` removes a network from `networks_by_ssid`,
+  the network is finalized, signal handlers are disconnected, and the row
+  is finalized — no orphaned objects leak across scan cycles.
+- All signal handler IDs are properly stored and disconnected in
+  `disconnect_network()` — no handler leaks across `set_item()` calls.
+
+### `Logger`
+
+- Logs to `~/.local/state/wifiman/wifiman.log` when file logging is enabled
+- Integrates with GLib logging APIs (`GLib.debug`, `GLib.message`, etc.) for
+  journald/stderr output
+- Structured format: `[timestamp] [LEVEL] [Module] message`
+- Configurable max file size with automatic rotation (renames to `.old`)
+- Guarded by `--debug` CLI flag — no file I/O when disabled
+
+**Asynchronous design:**
+- All public API methods (`debug`, `info`, `warn`, `error`) only enqueue a
+  `LogEntry` onto a lock-free `AsyncQueue` — they never perform file I/O
+- A dedicated writer thread (`"wifiman-log"`) consumes the queue:
+  - `timeout_pop(100ms)` provides batching — bursts are collected without
+    per-message wakeup
+  - After each batch, file size is checked and rotation is performed
+    atomically inside the writer thread
+  - The file handle is flushed after each batch
+- `debug()` and `info()` gate on `debug_on` (mirrors `--debug`) before any
+  formatting or GLib calls — true no-ops when `--debug` is not passed
+- `warn()` and `error()` always format and always go to journald regardless
+- `shutdown()` sets an atomic stop flag, pushes a sentinel entry to wake the
+  writer, then calls `join()` — guarantees all queued entries are flushed
+- The writer thread only exits after draining the queue and closing the file
+- Queue uses a full destroy function (`g_async_queue_new_full`) as a safety
+  net — any entries remaining on destruction are freed automatically
 
 ### `WifiUtils`
 
 - Converts SSID bytes to safe display strings
-- Maps signal strength to symbolic icons
 - Maps NM security flags to app-level security values
+- Formats bitrate, signal dBm, scan age, and connection health labels
+- Dead functions removed: `signal_quality_label`, `join_nonempty`,
+  `connectivity_to_style`, `active_connection_reason_to_label`,
+  `device_state_reason_to_label`, `ssid_equal` (none called anywhere)
 
 ## Features
 
 - Scan for nearby Wi-Fi networks in real time
 - Show only SSIDs currently detected in scan results
-- Toggle wireless on or off from the menu
+- Toggle wireless on or off from the menu (turning Wi-Fi OFF closes the app)
 - Search available networks by SSID (scan results only)
 - Keep the search field visible even when no results match
 - Always show the connected network as a hero row, even when it is not in the
@@ -294,7 +361,7 @@ Suggested additions:
 ## Base Feature Mapping
 
 - Scan nearby networks -> continuous scanning plus cached freshness labels
-- Wireless toggle -> same menu control, plus auto-reconnect policy handling
+- Wireless toggle -> closes the app when turned OFF, plus auto-reconnect policy handling
 - Search by SSID -> debounced search with persistent search field
 - Connected hero + available scan results -> same grouping, plus richer badges
 - Connected hero row -> compact dashboard with SSID, signal, IP, and speed
@@ -404,10 +471,10 @@ Key style classes:
 - `.dialog-close` — 46×46px hit-box, `border-radius: 0 12px 0 0`,
   zero padding/margin/border, hover background
 - `.dialog-body`
+- `.dialog-input` — compact entry styling (28px min-height, 6px border-radius)
 - `.dialog-field-label`
 - `.dialog-cancel`
 - `.dialog-error`
 
 Dark mode uses `.dark-mode` class on windows and popovers (not `@media`
-queries), toggled at runtime via
-`gtk_application_prefer_dark_theme` + CSS class sync.
+queries), toggled at runtime via CSS class sync.

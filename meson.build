@@ -22,9 +22,11 @@ src_files = [
   # Services
   'src/services/NetworkManagerService.vala',
   # Widgets
+  'src/widgets/SignalIcon.vala',
   'src/widgets/WifiNetworkRow.vala',
   # Utils
   'src/utils/WifiUtils.vala',
+  'src/utils/Logger.vala',
 ]
 
 # Resource file
