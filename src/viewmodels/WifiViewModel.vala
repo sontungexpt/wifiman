@@ -70,6 +70,19 @@ public class WifiViewModel : GLib.Object {
     public signal void error (string message);
 
     /**
+     * Emitted when a manual connection attempt fails.
+     *
+     * Unlike the generic {@link error} signal, this is guaranteed to
+     * originate from a user-initiated connection attempt.  The
+     * network object is provided so the UI can re-show the password
+     * dialog with an inline error.
+     *
+     * @param network  The network whose connection failed.
+     * @param message  Human-readable error description.
+     */
+    public signal void connect_failed (WifiNetwork network, string message);
+
+    /**
      * The flat list of items (headers + networks) displayed in the UI.
      */
     public GLib.ListStore items { get; private set; }
@@ -154,6 +167,7 @@ public class WifiViewModel : GLib.Object {
     private ulong service_scan_started_id = 0;
     private ulong service_scan_finished_id = 0;
     private ulong service_error_id = 0;
+    private ulong service_connection_failed_id = 0;
 
     /**
      * Whether auto-reconnect to previously saved networks is enabled.
@@ -220,6 +234,7 @@ public class WifiViewModel : GLib.Object {
             schedule_rebuild ();
         });
         service_error_id = service.error.connect ((message) => error (message));
+        service_connection_failed_id = service.connection_failed.connect (on_connection_failed);
 
         auto_connect_cooldowns = new GLib.HashTable<string, bool> (GLib.str_hash, GLib.str_equal);
         disconnect_cooldowns = new GLib.HashTable<string, bool> (GLib.str_hash, GLib.str_equal);
@@ -360,6 +375,33 @@ public class WifiViewModel : GLib.Object {
      * @param username  Optional new 802.1X username.
      * @throws Error if NetworkManager rejects the request.
      */
+    /**
+     * Handle a connection failure from the service layer.
+     *
+     * Only reacts when a manual connection attempt is in progress and
+     * the failing SSID matches the expected one.
+     *
+     * @param ssid    The SSID that failed.
+     * @param reason  The reason for the failure.
+     */
+    private void on_connection_failed (string ssid, NM.ActiveConnectionStateReason reason) {
+        if (!_manual_connecting || ssid != _manual_connecting_ssid) {
+            return;
+        }
+
+        Logger.warn ("WifiViewModel", "Manual connection failed for '%s': reason=%u", ssid, reason);
+        _manual_connecting = false;
+        _manual_connecting_ssid = "";
+        if (_manual_connect_timeout_id != 0) {
+            Source.remove (_manual_connect_timeout_id);
+            _manual_connect_timeout_id = 0;
+        }
+        var network = networks_by_ssid.lookup (ssid);
+        if (network != null) {
+            connect_failed (network, "Authentication failed");
+        }
+    }
+
     public async void reconnect_network (WifiNetwork network, string? password = null, string? username = null) throws GLib.Error {
         Logger.info ("WifiViewModel", "Reconnecting network: %s", network.ssid);
         if (network.active_connection != null) {

@@ -55,6 +55,17 @@ public class NetworkManagerService : GLib.Object {
      */
     public signal void error (string message);
 
+    /**
+     * Emitted when an active connection reaches DEACTIVATED state.
+     *
+     * Only emitted for 802-11-wireless connections.  Consumers should
+     * check whether this corresponds to their manual connect attempt.
+     *
+     * @param ssid    The SSID of the failed connection.
+     * @param reason  The reason the connection was deactivated.
+     */
+    public signal void connection_failed (string ssid, NM.ActiveConnectionStateReason reason);
+
     private NM.Client? client;
     private ulong device_added_id = 0;
     private ulong device_removed_id = 0;
@@ -405,8 +416,35 @@ public class NetworkManagerService : GLib.Object {
         if (active_signal_ids.contains (active)) {
             return;
         }
-        var id = active.state_changed.connect (() => changed ());
+        var id = active.state_changed.connect ((state, reason) => {
+            if ((NM.ActiveConnectionState) state == NM.ActiveConnectionState.DEACTIVATED
+                && active.get_connection_type () == "802-11-wireless") {
+                var ssid = resolve_ssid_from_active (active);
+                if (ssid != null) {
+                    connection_failed (ssid, (NM.ActiveConnectionStateReason) reason);
+                }
+            }
+            changed ();
+        });
         active_signal_ids.insert (active, id);
+    }
+
+    /**
+     * Extract the SSID string from an active connection.
+     *
+     * @param active  The active connection to inspect.
+     * @return The SSID as a string, or null if it cannot be resolved.
+     */
+    private string? resolve_ssid_from_active (NM.ActiveConnection active) {
+        var connection = active.get_connection ();
+        if (connection == null) {
+            return null;
+        }
+        var wifi = connection.get_setting_wireless ();
+        if (wifi == null || wifi.get_ssid () == null) {
+            return null;
+        }
+        return WifiUtils.ssid_to_string (wifi.get_ssid ());
     }
 
     /**

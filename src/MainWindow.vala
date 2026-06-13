@@ -474,6 +474,9 @@ public class MainWindow : Gtk.ApplicationWindow {
             error_subtitle.label = message;
             stack.visible_child_name = "error";
         });
+        manager.connect_failed.connect ((network, message) => {
+            show_connect_dialog (network, message);
+        });
         update_state ();
     }
 
@@ -760,7 +763,7 @@ public class MainWindow : Gtk.ApplicationWindow {
      *
      * @param network  The secured network to connect to.
      */
-    private void show_connect_dialog (WifiNetwork network) {
+    private void show_connect_dialog (WifiNetwork network, string? initial_error = null) {
         Logger.info ("MainWindow", "Showing connect dialog for: %s", network.ssid);
         var dialog = new Gtk.Window ();
         dialog.title = network.ssid;
@@ -807,6 +810,11 @@ public class MainWindow : Gtk.ApplicationWindow {
         error_box.append (error_label);
         body.append (error_box);
 
+        if (initial_error != null) {
+            error_label.label = initial_error;
+            error_box.visible = true;
+        }
+
         var actions = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 10);
         actions.add_css_class ("dialog-actions");
         actions.halign = Gtk.Align.END;
@@ -818,6 +826,8 @@ public class MainWindow : Gtk.ApplicationWindow {
         actions.append (cancel);
         actions.append (connect);
         body.append (actions);
+
+        bool connect_initiated = false;
 
         cancel.clicked.connect (() => dialog.close ());
 
@@ -831,6 +841,7 @@ public class MainWindow : Gtk.ApplicationWindow {
                 }
                 try {
                     manager.connect_network.end (res);
+                    connect_initiated = true;
                     dialog.close ();
                 } catch (GLib.Error e) {
                     error_label.label = e.message;
@@ -850,6 +861,7 @@ public class MainWindow : Gtk.ApplicationWindow {
                 }
                 try {
                     manager.connect_network.end (res);
+                    connect_initiated = true;
                     dialog.close ();
                 } catch (GLib.Error e) {
                     error_label.label = e.message;
@@ -862,7 +874,9 @@ public class MainWindow : Gtk.ApplicationWindow {
         _connect_dialog_active = true;
         dialog.close_request.connect (() => {
             _connect_dialog_active = false;
-            manager.cancel_manual_connect ();
+            if (!connect_initiated) {
+                manager.cancel_manual_connect ();
+            }
             dialog.destroy ();
             return true;
         });
