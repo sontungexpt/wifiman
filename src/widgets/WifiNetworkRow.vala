@@ -90,7 +90,7 @@ public class WifiNetworkRow : Gtk.Box {
         var badge_box = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 6);
         badge_box.halign = Gtk.Align.CENTER;
         badge_box.valign = Gtk.Align.CENTER;
-        badge_box.add_css_class ("status-badges");
+
         status_box.append (badge_box);
 
         primary_status_label = new Gtk.Label ("");
@@ -102,7 +102,7 @@ public class WifiNetworkRow : Gtk.Box {
         security_status_label = new Gtk.Label ("Secured");
         security_status_label.visible = false;
         security_status_label.add_css_class ("status-badge");
-        security_status_label.add_css_class ("secured");
+
         security_status_label.valign = Gtk.Align.CENTER;
         badge_box.append (security_status_label);
 
@@ -160,10 +160,8 @@ public class WifiNetworkRow : Gtk.Box {
     public void set_hero (bool hero) {
         if (hero) {
             add_css_class ("hero-network");
-            row_box.add_css_class ("hero-network");
         } else {
             remove_css_class ("hero-network");
-            row_box.remove_css_class ("hero-network");
         }
     }
 
@@ -183,7 +181,6 @@ public class WifiNetworkRow : Gtk.Box {
 
         network = item.network;
         row_box.visible = true;
-        add_css_class ("network-item");
 
         if (network == null) {
             return;
@@ -204,14 +201,6 @@ public class WifiNetworkRow : Gtk.Box {
         dns_id = network.notify["dns-summary"].connect (() => update_metrics ());
         warning_id = network.notify["warning-text"].connect (() => update_metrics ());
         health_id = network.notify["health-text"].connect (() => update_metrics ());
-    }
-
-    /**
-     * Clear the row and disconnect all network property bindings.
-     */
-    public void clear () {
-        disconnect_network ();
-        row_box.visible = false;
     }
 
     /**

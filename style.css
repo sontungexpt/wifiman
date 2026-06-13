@@ -24,7 +24,6 @@
 @define-color light-bg #f6f6f7;
 @define-color light-bg-white #ffffff;
 @define-color light-bg-dialog #f5f5f7;
-@define-color light-input-bg #ffffff;
 @define-color light-accent #3584e4;
 @define-color light-warning #d97706;
 @define-color light-success #059669;
@@ -85,7 +84,7 @@ stack {
     color: @light-text-primary;
     border: 1px solid rgba(0, 0, 0, 0.14);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-    transition: all 0.2s ease-in-out;
+    transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
 }
 
 .premium-search:focus-within {
@@ -93,9 +92,6 @@ stack {
     color: @light-text-primary;
     border-color: @light-accent;
     box-shadow: 0 0 0 3px alpha(@light-accent, 0.15), 0 2px 8px rgba(0, 0, 0, 0.06);
-}
-
-.hero-container {
 }
 
 .search-empty {
@@ -150,12 +146,11 @@ stack {
     padding: 16px 20px;
     border-radius: 12px;
     background: transparent;
-    transition: all 0.2s ease-in-out;
+    transition: background 0.15s ease;
 }
 
 .network-row:hover {
     background: rgba(0, 0, 0, 0.04);
-    transform: translateX(2px);
 }
 
 .network-row:focus-within {
@@ -233,11 +228,10 @@ stack {
     border-radius: 14px;
     background: linear-gradient(135deg, #3584e4, #1a5fb4);
     box-shadow: 0 4px 12px rgba(35, 131, 228, 0.3);
-    transition: all 0.2s ease-in-out;
+    transition: box-shadow 0.2s ease;
 }
 
 .hero-network:hover {
-    transform: translateY(-1px);
     box-shadow: 0 6px 18px rgba(35, 131, 228, 0.34);
 }
 
@@ -324,7 +318,7 @@ headerbar.dialog-headerbar .end {
     box-shadow: none;
     outline: none;
     color: @light-text-secondary;
-    transition: all 0.15s ease;
+    transition: background 0.15s ease, color 0.15s ease;
 }
 
 .dialog-close:hover {
@@ -374,7 +368,7 @@ headerbar.dialog-headerbar > box.end * {
     min-height: 38px;
     padding: 0 10px;
     border-radius: 8px;
-    background: @light-input-bg;
+    background: @light-bg-white;
     border: 1px solid rgba(0, 0, 0, 0.08);
     color: @light-text-primary;
     font-size: 13px;
@@ -401,7 +395,7 @@ passwordentry button {
     border-radius: 6px;
     background: transparent;
     color: @light-text-secondary;
-    transition: all 0.15s ease;
+    transition: background 0.15s ease, color 0.15s ease;
 }
 
 passwordentry button:hover {
@@ -488,7 +482,7 @@ button {
     min-width: 96px;
     padding: 0 16px;
     font-weight: 600;
-    transition: all 0.15s ease;
+    transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 /* ── Cancel (Ghost / Secondary) ──────────────────────────────── */
@@ -559,7 +553,15 @@ entry.search > text > placeholder {
 /* ── Popover (light mode) ───────────────────────────────────── */
 
 popover,
-popover.background,
+popover.background {
+    padding: 0;
+    border: none;
+    outline: none;
+    background: @light-bg-white;
+    color: @light-text-primary;
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.15);
+}
+
 popover.background > arrow,
 popover.background > contents,
 popover scrolledwindow,
@@ -569,24 +571,15 @@ popover .popover-content {
     color: @light-text-primary;
 }
 
-popover,
-popover.background {
-    padding: 0;
-    border: none;
-    outline: none;
-    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.15);
-}
-
-popover,
-popover contents,
-popover arrow,
-.popover-content {
-    border-radius: 12px;
-}
-
 popover.background > contents {
     padding: 0;
     box-shadow: none;
+}
+
+popover.background > arrow,
+popover.background > contents,
+popover .popover-content {
+    border-radius: 12px;
 }
 
 .popover-content {

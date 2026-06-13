@@ -13,7 +13,7 @@ public class SignalIcon : Gtk.DrawingArea {
         int filled = strength >= 80 ? 4 : strength >= 60 ? 3 : strength >= 40 ? 2 : strength >= 20 ? 1 : 0;
 
         double cx = width / 2.0;
-        double cy = height - 3.0;
+        double cy = height - 4.0;
         double[] radii = { 4.0, 8.0, 12.0, 16.0 };
         double start_angle = 5.0 * Math.PI / 4.0;
         double end_angle = 7.0 * Math.PI / 4.0;

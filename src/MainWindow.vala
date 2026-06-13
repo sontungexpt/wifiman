@@ -399,7 +399,6 @@ public class MainWindow : Gtk.ApplicationWindow {
 
         hero_container = new Gtk.Box (Gtk.Orientation.VERTICAL, 0);
         hero_container.hexpand = true;
-        hero_container.add_css_class ("hero-container");
         content_shell.append (hero_container);
 
         search_empty_box = new Gtk.Box (Gtk.Orientation.VERTICAL, 6);
@@ -418,10 +417,6 @@ public class MainWindow : Gtk.ApplicationWindow {
 
         content_shell.append (search_empty_box);
 
-        var network_panel = new Gtk.Box (Gtk.Orientation.VERTICAL, 0);
-        network_panel.hexpand = true;
-        network_panel.add_css_class ("network-panel");
-
         network_list = new Gtk.ListBox ();
         network_list.hexpand = true;
         network_list.selection_mode = Gtk.SelectionMode.NONE;
@@ -429,9 +424,9 @@ public class MainWindow : Gtk.ApplicationWindow {
         network_list.activate_on_single_click = true;
         network_list.row_activated.connect (on_row_activated);
         network_list.add_css_class ("network-listbox");
-        network_panel.append (network_list);
+        network_list.add_css_class ("network-panel");
 
-        content_shell.append (network_panel);
+        content_shell.append (network_list);
         scrolled.set_child (content_shell);
         return scrolled;
     }
@@ -628,7 +623,6 @@ public class MainWindow : Gtk.ApplicationWindow {
         var row = new Gtk.ListBoxRow ();
         row.selectable = false;
         row.activatable = true;
-        row.add_css_class ("network-list-row");
 
         var widget = new WifiNetworkRow ();
         widget.set_item (item);
