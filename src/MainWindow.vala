@@ -893,9 +893,7 @@ public class MainWindow : Gtk.ApplicationWindow {
         dialog.close_request.connect (() => {
             _connect_dialog_active = false;
             manager.disconnect (connect_failed_id);
-            if (!connect_initiated) {
-                manager.cancel_manual_connect ();
-            }
+            manager.cancel_manual_connect ();
             dialog.destroy ();
             return true;
         });

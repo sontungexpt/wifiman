@@ -150,12 +150,14 @@ public class WifiViewModel : GLib.Object {
     private int64 freshest_scan = -1;
     private GLib.HashTable<string, bool> auto_connect_cooldowns;
     private GLib.HashTable<string, bool> disconnect_cooldowns;
+    private GLib.HashTable<string, bool> auto_connect_failures;
     private const uint AUTO_CONNECT_COOLDOWN_MS = 20000;
     private const uint DISCONNECT_COOLDOWN_MS = 30000;
     private bool _started = false;
     private bool _hidden = false;
     private bool _manual_connecting = false;
     private string _manual_connecting_ssid = "";
+    private int _connect_attempt_id = 0;
     private uint _manual_connect_timeout_id = 0;
     private const uint MANUAL_CONNECT_TIMEOUT_MS = 120000;
     private ulong service_changed_id = 0;
@@ -253,6 +255,7 @@ public class WifiViewModel : GLib.Object {
 
         auto_connect_cooldowns = new GLib.HashTable<string, bool> (GLib.str_hash, GLib.str_equal);
         disconnect_cooldowns = new GLib.HashTable<string, bool> (GLib.str_hash, GLib.str_equal);
+        auto_connect_failures = new GLib.HashTable<string, bool> (GLib.str_hash, GLib.str_equal);
 
         rebuild ();
         update_connectivity_state ();
@@ -342,6 +345,7 @@ public class WifiViewModel : GLib.Object {
         Log.info ("WifiViewModel", "Manual connect cancelled for: %s", _manual_connecting_ssid);
         _manual_connecting = false;
         _manual_connecting_ssid = "";
+        _connect_attempt_id++;
         if (_manual_connect_timeout_id != 0) {
             Source.remove (_manual_connect_timeout_id);
             _manual_connect_timeout_id = 0;
@@ -359,6 +363,8 @@ public class WifiViewModel : GLib.Object {
             Source.remove (_manual_connect_timeout_id);
             _manual_connect_timeout_id = 0;
         }
+        // Allow auto-connect to retry this SSID after user-initiated attempt.
+        auto_connect_failures.remove (network.ssid);
 
         try {
             yield service.connect_network (network, password, username);
@@ -371,7 +377,11 @@ public class WifiViewModel : GLib.Object {
         // Schedule flag-setting on idle so any pending DEACTIVATED signals
         // from the previous ActiveConnection are dispatched first and
         // ignored (they arrive while _manual_connecting is still false).
+        int my_attempt = ++_connect_attempt_id;
         Idle.add (() => {
+            if (my_attempt != _connect_attempt_id) {
+                return Source.REMOVE;
+            }
             _manual_connecting = true;
             _manual_connecting_ssid = network.ssid;
             _manual_connect_timeout_id = Timeout.add (MANUAL_CONNECT_TIMEOUT_MS, () => {
@@ -395,20 +405,22 @@ public class WifiViewModel : GLib.Object {
      * @param reason  The reason for the failure.
      */
     private void on_connection_failed (string ssid, NM.ActiveConnectionStateReason reason) {
-        if (!_manual_connecting || ssid != _manual_connecting_ssid) {
-            return;
-        }
+        Log.warn ("WifiViewModel", "Connection failed for '%s': reason=%u", ssid, reason);
 
-        Log.warn ("WifiViewModel", "Manual connection failed for '%s': reason=%u", ssid, reason);
-        _manual_connecting = false;
-        _manual_connecting_ssid = "";
-        if (_manual_connect_timeout_id != 0) {
-            Source.remove (_manual_connect_timeout_id);
-            _manual_connect_timeout_id = 0;
-        }
-        var network = networks_by_ssid.lookup (ssid);
-        if (network != null) {
-            connect_failed (network, "Authentication failed");
+        // Track the failure so auto-connect skips this SSID.
+        auto_connect_failures.insert (ssid, true);
+
+        if (_manual_connecting && ssid == _manual_connecting_ssid) {
+            _manual_connecting = false;
+            _manual_connecting_ssid = "";
+            if (_manual_connect_timeout_id != 0) {
+                Source.remove (_manual_connect_timeout_id);
+                _manual_connect_timeout_id = 0;
+            }
+            var network = networks_by_ssid.lookup (ssid);
+            if (network != null) {
+                connect_failed (network, "Authentication failed");
+            }
         }
     }
 
@@ -549,26 +561,19 @@ public class WifiViewModel : GLib.Object {
         if (!_started || !auto_reconnect_enabled) return;
         Log.debug ("WifiViewModel", "Checking networks for auto-connect");
 
-        if (_manual_connecting) {
-            if (_manual_connecting_ssid.length > 0) {
-                var network = networks_by_ssid.lookup (_manual_connecting_ssid);
-                if (network != null && (network.is_connected || network.connection_failed)) {
-                    Log.info ("WifiViewModel", "Manual connect resolved for: %s (connected=%s, failed=%s)",
-                        _manual_connecting_ssid,
-                        network.is_connected.to_string (),
-                        network.connection_failed.to_string ());
-                    _manual_connecting = false;
-                    _manual_connecting_ssid = "";
-                    if (_manual_connect_timeout_id != 0) {
-                        Source.remove (_manual_connect_timeout_id);
-                        _manual_connect_timeout_id = 0;
-                    }
+        if (_manual_connecting && _manual_connecting_ssid.length > 0) {
+            var manual_net = networks_by_ssid.lookup (_manual_connecting_ssid);
+            if (manual_net != null && (manual_net.is_connected || manual_net.connection_failed)) {
+                Log.info ("WifiViewModel", "Manual connect resolved for: %s (connected=%s, failed=%s)",
+                    _manual_connecting_ssid,
+                    manual_net.is_connected.to_string (),
+                    manual_net.connection_failed.to_string ());
+                _manual_connecting = false;
+                _manual_connecting_ssid = "";
+                if (_manual_connect_timeout_id != 0) {
+                    Source.remove (_manual_connect_timeout_id);
+                    _manual_connect_timeout_id = 0;
                 }
-            }
-            if (_manual_connecting) {
-                Log.debug ("WifiViewModel", "Auto-connect skipped: manual connection in progress to %s",
-                    _manual_connecting_ssid);
-                return;
             }
         }
 
@@ -579,6 +584,7 @@ public class WifiViewModel : GLib.Object {
             if (network.access_point == null || network.device == null) return;
             if (auto_connect_cooldowns.contains (ssid)) return;
             if (disconnect_cooldowns.contains (ssid)) return;
+            if (auto_connect_failures.contains (ssid)) return;
 
             try_auto_connect.begin (network);
         });
@@ -941,6 +947,8 @@ public class WifiViewModel : GLib.Object {
         }
         items.splice (0, old_count, new_items);
 
+        freeze_notify ();
+
         bool now_has_connected = connected.length > 0;
         if (has_connected_network != now_has_connected) {
             has_connected_network = now_has_connected;
@@ -958,6 +966,8 @@ public class WifiViewModel : GLib.Object {
             has_visible_networks = now_has_visible_networks;
             notify_property ("has-visible-networks");
         }
+
+        thaw_notify ();
     }
 
     /**

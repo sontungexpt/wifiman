@@ -53,7 +53,10 @@ docs/
        2026-06-12.md            Async logger, Cairo SignalIcon, bitrate fix, binding
        2026-06-13.md            Local-function ABI crash, manual-connect guard, SSID fix
         2026-06-14.md            Log namespace rewrite, signal shutdown, dead code,
-                                  IP/DNS fix, dark mode polish
+                                   IP/DNS fix, dark mode polish,
+                                   auto-connect failure tracking, manual-connect
+                                   guard hardening, freeze/thaw batching,
+                                   connect_network delete+add refactor
 ```
 
 ## Responsibilities
@@ -116,23 +119,39 @@ docs/
 - Exposes `refresh_network_details(network)` to populate IP/gateway/DNS on a
   specific network by resolving its active connection and calling
   `update_runtime_details()` — used by the dialog builder in `MainWindow`
+- `rebuild_items()` wraps property notifications in `freeze_notify()` /
+  `thaw_notify()` — batching the three `notify_property()` calls into a single
+  render pass instead of three sequential ones
 - Forwards connect, reconnect, disconnect, forget, and scan actions
-- **Manual connect guard**: when `connect_network()` is called, sets
-  `_manual_connecting = true` and `_manual_connecting_ssid = network.ssid` with a
-  120-second safety timeout (`_manual_connect_timeout_id`). During manual connect,
-  `try_auto_connect_all()` is blocked — prevents auto-connect from racing against
-  a user-initiated password-based connection.
-  - `cancel_manual_connect()` clears flags + timeout, called from:
+- **Manual connect guard**: when `connect_network()` is called, clears
+  `_manual_connecting` flags first, then awaits `service.connect_network()`. On
+  success, an Idle handler sets `_manual_connecting = true` with a 120-second
+  safety timeout. The Idle dispatch ensures any pending DEACTIVATED signals from
+  the superseded ActiveConnection are already processed (and ignored, since the
+  flag is still false at that point).
+  - `cancel_manual_connect()` clears flags + timeout + increments
+    `_connect_attempt_id` — the Idle handler checks `my_attempt !=
+    _connect_attempt_id` and skips flag-setting if cancel was called first
+    (prevents stale Idle from re-setting the flag after dialog close).
+  - Called from:
     - dialog `close_request` (user dismisses dialog)
     - manual connect timeout expiry (120s safety net)
     - `try_auto_connect_all()` when the manual network resolves (connected or failed)
+- **Auto-connect failure tracking**: `on_connection_failed()` is now called for
+  ALL connection failures (not just manual). It records the SSID in
+  `auto_connect_failures` so `try_auto_connect_all()` skips it. Manual-connect
+  failures additionally emit `connect_failed` to show a password dialog.
+  `connect_network()` removes the SSID from `auto_connect_failures` when the user
+  explicitly tries again.
 - Auto-connects to saved networks detected in scan results with per-SSID cooldown
   (20s) and post-disconnect cooldown (30s) via Timeout-based tracking
-- Hard safety guarantee: auto-connect is blocked by three guards:
+- Hard safety guarantee: auto-connect is blocked by four guards:
   - `_started` — never runs on initial startup rebuild
   - `auto_reconnect_enabled` — user-facing toggle to disable auto-connect
   - `has_active_wifi_connection()` — refuses auto-connect when any wifi
     connection is already active/activating
+  - `auto_connect_failures` — skips SSIDs that failed previously (previously
+    wrong-password networks don't retry forever)
 - Live scan freshness label via 5-second periodic timer
 - `shutdown()` disconnects all service signal handlers, cleans up all timers
   (`settle_scan_id`, `background_scan_id`, `freshness_timer_id`,
@@ -144,6 +163,9 @@ docs/
 - Watches device, connection, and active-connection changes
 - Requests scans
 - Creates and activates connections
+- For saved connections with a password update: **deletes** the old saved
+  connection first, then `add_and_activate_connection_async` with a fresh
+  `NM.SimpleConnection` — avoids orphaned duplicates in NM's database
 - Keeps saved connections internally for auto-connect and auth reuse
 - Disconnects and forgets saved networks on request
 - Does not expose a saved-network list to the UI layer

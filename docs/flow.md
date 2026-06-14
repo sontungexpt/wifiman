@@ -99,9 +99,10 @@ try_auto_connect_all () / try_auto_connect ()
        │    └─ returns true if any wifi is ACTIVATED or ACTIVATING
        ├─ network.is_connected?  →  return
        ├─ network.saved_connection == null?  →  return
-       ├─ network.access_point == null?  →  return
-       ├─ auto_connect_cooldown active?  →  return  (20s timer)
-       └─ disconnect_cooldown active?  →  return  (30s timer)
+        ├─ network.access_point == null?  →  return
+        ├─ auto_connect_cooldown active?  →  return  (20s timer)
+        ├─ disconnect_cooldown active?  →  return  (30s timer)
+        └─ auto_connect_failures.contains (ssid)?  →  return
                │
                ▼
          service.connect_network ()
@@ -113,7 +114,7 @@ Auto-connect only reaches NM when:
 - App has started (`_started`)
 - Feature is enabled (`auto_reconnect_enabled`)
 - No wifi connection is active (`has_active_wifi_connection()`)
-- Individual network passes its own checks
+- Individual network passes its own checks (including not in `auto_connect_failures`)
 
 ## Signal flow
 
@@ -176,9 +177,9 @@ User clicks "Connect" (secured, dialog)
        ├─ _manual_connecting = true
        ├─ _manual_connect_timeout_id = Timeout.add (120s, clear flags)
        └─ service.connect_network ()
-            ├─ existing saved + has password?  →  create_connection
-            │                                    + add_and_activate_connection_async
-            │                                    (deletes old saved connection)
+├─ existing saved + has password?  →  delete_async (old saved connection)
+│                                    + create_connection
+│                                    + add_and_activate_connection_async
             ├─ existing saved + no password?   →  activate_connection_async (existing)
             └─ new?                            →  create_connection
                                                    + add_and_activate_connection_async
@@ -243,7 +244,15 @@ User closes dialog (X button, Esc, or Cancel)
        └─ return true  ← prevents default hide-only handler
 ```
 
-Key: the `_connect_dialog_active` flag is checked in the async callback
+Key: `manager.cancel_manual_connect()` is always called (the old
+`!connect_initiated` guard was removed). This ensures the `_manual_connecting`
+flag is cleared even when the async operation has already returned (e.g. the
+user enters a password, the D-Bus call succeeds quickly, the 1.5s auto-close
+timer fires, and the dialog closes before the Idle handler sets
+`_manual_connecting`). The Idle handler's `_connect_attempt_id` check prevents
+it from re-setting the flag after cancel cleared it.
+
+The `_connect_dialog_active` flag is checked in the async callback
 before touching dialog widgets. If the dialog was already closed, the
 callback returns early — no crash on destroyed widgets.
 
@@ -262,18 +271,24 @@ NM ActiveConnection enters DEACTIVATED state
        ▼
   WifiViewModel.on_connection_failed ()
        │
+       ├─ auto_connect_failures.insert (ssid, true)
+       │    (always tracked — stops auto-connect retries)
+       │
        ├─ _manual_connecting && ssid == _manual_connecting_ssid?
        │    │  YES → clear flags, emit connect_failed (network, message)
-       │    │  NO  → return (ignore stale / auto-connect failures)
+       │    │       → shows password dialog (either new or inline error)
+       │    │  NO  → auto-connect failure, no dialog (user clicks network
+       │    │         to see "Failed" state and initiate manual reconnect)
        │    ▼
-       └─ MainWindow.show_connect_dialog () or dialog.connect_failed handler
-            ├─ dialog exists?  →  update error box inline, re-enable button
-            └─ no dialog?      →  create new dialog with initial error shown
+       └─ rebuild () → try_auto_connect_all () skips failed SSIDs
+            because auto_connect_failures.contains (ssid) returns true
 ```
 
-Auto-connect failures and stale DEACTIVATED signals from superseded
-ActiveConnections are silently ignored — the `_manual_connecting` flag
-must be set and match the failing SSID for the signal to reach the user.
+All connection failures are now tracked in `auto_connect_failures`,
+which prevents endless auto-connect retry loops. Manual-connect failures
+additionally show a password dialog. To reset a failed SSID, the user
+must explicitly initiate a connection (via `connect_network()`, which
+calls `auto_connect_failures.remove(ssid)`).
 
 ## Manual connect guard
 
@@ -282,29 +297,37 @@ WifiViewModel.connect_network ()
        │
        ├─ _manual_connecting = false         ← clear flags first so stale
        ├─ _manual_connecting_ssid = ""          DEACTIVATED from the old AC
-       ├─ Source.remove (timeout)               (fired during the async yield
-       │                                        below) are ignored
+       ├─ auto_connect_failures.remove (ssid)   (fired during the async yield
+       ├─ Source.remove (timeout)               below) are ignored
+       │
        ├─ yield service.connect_network ()
        │    ├─ on error → throw (flags stay false)
        │    └─ on success → fall through to Idle
        │
-       └─ Idle.add (() => {
-              _manual_connecting = true        ← set on idle so all pending
-              _manual_connecting_ssid = ssid     DEACTIVATED signals from the
-              Timeout.add (120s, clear flags)    superseded AC are already
-              return REMOVE                      dispatched (and ignored)
-           })
-              │
-              ├─ on subsequent DEACTIVATED:
-              │    on_connection_failed () checks _manual_connecting + SSID match
-              │    → emits connect_failed signal
-              │
-              └─ try_auto_connect_all () sees _manual_connecting → returns early
-                   (no auto-connect races against user password flow)
+       └─ int my_attempt = ++_connect_attempt_id;
+          Idle.add (() => {
+               if (my_attempt != _connect_attempt_id)  ← if cancel was called
+                   return REMOVE                          between yield and Idle,
+                                                          skip flag-setting
+               _manual_connecting = true        ← set on idle so all pending
+               _manual_connecting_ssid = ssid     DEACTIVATED signals from the
+               Timeout.add (120s, clear flags)    superseded AC are already
+               return REMOVE                      dispatched (and ignored)
+            })
+               │
+               ├─ on subsequent DEACTIVATED:
+               │    on_connection_failed () checks _manual_connecting + SSID match
+               │    → emits connect_failed signal
+               │
+               └─ try_auto_connect_all () no longer returns early when
+                    _manual_connecting is true (other networks can still
+                    auto-connect). The specific SSID is already covered by
+                    is_connecting / auto_connecting flags.
 ```
 
-The manual connect guard ensures that auto-connect cannot interfere with
-a user-initiated password-based connection attempt. When the dialog is
-dismissed, `cancel_manual_connect()` is called to release the guard.
+The manual connect guard prevents the user's password-based connection from
+racing against stale DEACTIVATED signals. It does NOT block auto-connect for
+other networks. When the dialog is dismissed, `cancel_manual_connect()`
+increments `_connect_attempt_id`, which invalidates any pending Idle handler.
 
 All connection-mutating calls go through `NetworkManagerService` methods which are only reachable from explicit user UI actions or auto-connect logic.
