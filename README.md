@@ -22,6 +22,9 @@ is visible in scan results.
 - Background scanning every 45 seconds
 - Custom Cairo-drawn signal icon (works with any icon theme)
 - Multi‑file logging with automatic rotation and crash diagnostics
+- Portal login button opens browser for captive-portal sign-in
+- Fully themed dark mode with per-element styling (menus, badges, inputs, dialogs)
+- Automatic IP/gateway/DNS refresh in network details dialog
 
 ## Build
 

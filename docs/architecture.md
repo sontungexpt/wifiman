@@ -52,7 +52,8 @@ docs/
        2026-06-11.md            Dialog lifecycle, signal icon, auto-connect guards
        2026-06-12.md            Async logger, Cairo SignalIcon, bitrate fix, binding
        2026-06-13.md            Local-function ABI crash, manual-connect guard, SSID fix
-       2026-06-14.md            Log namespace rewrite, signal shutdown, dead code
+        2026-06-14.md            Log namespace rewrite, signal shutdown, dead code,
+                                  IP/DNS fix, dark mode polish
 ```
 
 ## Responsibilities
@@ -111,7 +112,10 @@ docs/
   `has_visible_networks`
 - Schedules background scans with throttling
 - Refreshes derived runtime details for signal, speed, portal, IP, gateway, and
-  DNS state
+  DNS state via `update_runtime_details()`
+- Exposes `refresh_network_details(network)` to populate IP/gateway/DNS on a
+  specific network by resolving its active connection and calling
+  `update_runtime_details()` — used by the dialog builder in `MainWindow`
 - Forwards connect, reconnect, disconnect, forget, and scan actions
 - **Manual connect guard**: when `connect_network()` is called, sets
   `_manual_connecting = true` and `_manual_connecting_ssid = network.ssid` with a
