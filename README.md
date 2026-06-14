@@ -28,9 +28,19 @@ is visible in scan results.
 
 ## Build
 
+Development (debug, faster compile):
+
 ```bash
-meson setup build
+meson setup build --buildtype debug
 meson compile -C build
+```
+
+Release (optimized, for install):
+
+```bash
+meson setup build-release --buildtype release
+meson compile -C build-release
+sudo meson install -C build-release
 ```
 
 Requires: `meson`, `valac`, `gtk4` (build), `libnm` (runtime).
