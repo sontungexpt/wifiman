@@ -14,7 +14,7 @@ is visible in scan results.
 - Search networks by SSID with live filtering
 - Auto-connect to known networks when detected (never disconnects the
   active connection automatically)
-- Captive portal detection with banner
+- Captive portal detection with banner and "Open Login Page" button
 - Network details: security, band, signal dBm, bitrate, IP, gateway, DNS
 - Connect / Reconnect / Disconnect / Forget actions
 - Wi-Fi toggle (turning Wi-Fi OFF closes the app)

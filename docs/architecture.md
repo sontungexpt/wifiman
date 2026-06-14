@@ -357,9 +357,13 @@ model.
 
 ### Captive portal handling
 
-- Detect captive portal state separately from normal connection state
-- Show a non-blocking banner in the results shell
-- Provide an `Open Login Page` action when a portal is detected
+- Detected via NetworkManager connectivity state (`NM.ConnectivityState.PORTAL`)
+- Yellow warning banner shown between searchbar and network list with
+  warning icon and "Captive portal detected. Sign-in may be required."
+- "Open Login Page" button opens `http://nmcheck.gnome.org/` in the
+  default browser — the portal intercepts and redirects to the login page
+- Connected network row shows "Captive portal" warning text
+- Banner auto-hides when NM reports full connectivity
 
 ### Advanced network actions
 
