@@ -29,8 +29,6 @@
 @define-color light-success #059669;
 @define-color light-error #dc2626;
 @define-color light-error-hover #ef4444;
-@define-color popover_bg_color @light-bg-white;
-
 /* ── Base layout ─────────────────────────────────────────────── */
 
 window {

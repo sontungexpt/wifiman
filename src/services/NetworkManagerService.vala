@@ -142,13 +142,6 @@ public class NetworkManagerService : GLib.Object {
     }
 
     /**
-     * Destructor — all signal cleanup is done in shutdown() or by
-     * g_signal_connect_object's weak-ref mechanism during finalization.
-     */
-    ~NetworkManagerService () {
-    }
-
-    /**
      * Shut down the service.
      *
      * Disconnects all signal handlers — from NM.Client, per-device,

@@ -326,30 +326,6 @@ public class WifiNetwork : GLib.Object {
     }
 
     /**
-     * CSS class name for the security badge.
-     *
-     * @return "warning", "saved", "connected", or "connecting".
-     */
-    public string security_badge_style {
-        owned get {
-            switch (security) {
-                case WifiSecurity.WEP:
-                    return "warning";
-                case WifiSecurity.WPA:
-                    return "saved";
-                case WifiSecurity.WPA2:
-                    return "connected";
-                case WifiSecurity.WPA3:
-                    return "connected";
-                case WifiSecurity.ENTERPRISE:
-                    return "connecting";
-                default:
-                    return "warning";
-            }
-        }
-    }
-
-    /**
      * Human-readable band label derived from the frequency.
      *
      * @return "6 GHz", "5 GHz", "2.4 GHz", or empty.

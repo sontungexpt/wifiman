@@ -31,11 +31,7 @@ public class WifiNetworkRow : Gtk.Box {
     private ulong bitrate_id = 0;
     private ulong scan_age_id = 0;
     private ulong signal_dbm_id = 0;
-    private ulong ip_address_id = 0;
-    private ulong gateway_id = 0;
-    private ulong dns_id = 0;
-    private ulong warning_id = 0;
-    private ulong health_id = 0;
+
 
     public override void dispose () {
         Log.debug ("NetworkRow", "Row disposed");
@@ -185,11 +181,6 @@ public class WifiNetworkRow : Gtk.Box {
         bitrate_id = network.notify["bitrate-mbps"].connect (() => update_metrics ());
         scan_age_id = network.notify["scan-age-text"].connect (() => update_metrics ());
         signal_dbm_id = network.notify["signal-dbm-text"].connect (() => update_metrics ());
-        ip_address_id = network.notify["ip-address"].connect (() => update_metrics ());
-        gateway_id = network.notify["gateway"].connect (() => update_metrics ());
-        dns_id = network.notify["dns-summary"].connect (() => update_metrics ());
-        warning_id = network.notify["warning-text"].connect (() => update_metrics ());
-        health_id = network.notify["health-text"].connect (() => update_metrics ());
     }
 
     /**
@@ -232,27 +223,6 @@ public class WifiNetworkRow : Gtk.Box {
             SignalHandler.disconnect (network, signal_dbm_id);
             signal_dbm_id = 0;
         }
-        if (ip_address_id != 0) {
-            SignalHandler.disconnect (network, ip_address_id);
-            ip_address_id = 0;
-        }
-        if (gateway_id != 0) {
-            SignalHandler.disconnect (network, gateway_id);
-            gateway_id = 0;
-        }
-        if (dns_id != 0) {
-            SignalHandler.disconnect (network, dns_id);
-            dns_id = 0;
-        }
-        if (warning_id != 0) {
-            SignalHandler.disconnect (network, warning_id);
-            warning_id = 0;
-        }
-        if (health_id != 0) {
-            SignalHandler.disconnect (network, health_id);
-            health_id = 0;
-        }
-
         if (signal_binding != null) {
             signal_binding.unbind ();
             signal_binding = null;
@@ -280,13 +250,8 @@ public class WifiNetworkRow : Gtk.Box {
         primary_status_label.remove_css_class ("connecting");
         primary_status_label.remove_css_class ("failed");
         primary_status_label.remove_css_class ("saved");
-        row_box.remove_css_class ("connected");
-        row_box.remove_css_class ("connecting");
-        row_box.remove_css_class ("failed");
-        row_box.remove_css_class ("saved");
         if (primary_status.length > 0) {
             primary_status_label.add_css_class (network.primary_status_style);
-            row_box.add_css_class (network.primary_status_style);
         }
     }
 
