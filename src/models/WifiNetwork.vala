@@ -326,30 +326,6 @@ public class WifiNetwork : GLib.Object {
     }
 
     /**
-     * CSS class name for the security badge.
-     *
-     * @return "warning", "saved", "connected", or "connecting".
-     */
-    public string security_badge_style {
-        owned get {
-            switch (security) {
-                case WifiSecurity.WEP:
-                    return "warning";
-                case WifiSecurity.WPA:
-                    return "saved";
-                case WifiSecurity.WPA2:
-                    return "connected";
-                case WifiSecurity.WPA3:
-                    return "connected";
-                case WifiSecurity.ENTERPRISE:
-                    return "connecting";
-                default:
-                    return "warning";
-            }
-        }
-    }
-
-    /**
      * Human-readable band label derived from the frequency.
      *
      * @return "6 GHz", "5 GHz", "2.4 GHz", or empty.
@@ -408,21 +384,6 @@ public class WifiNetwork : GLib.Object {
             if (access_point_count > 1) {
                 append_summary_part (builder, "%u APs".printf ((uint) access_point_count));
             }
-            return builder.str;
-        }
-    }
-
-    /**
-     * Metrics text combining signal, bitrate, and scan age.
-     *
-     * @return A string like "-65 dBm  ·  1300 Mbps  ·  Updated 30s ago".
-     */
-    public string metrics_text {
-        owned get {
-            var builder = new GLib.StringBuilder ();
-            append_summary_part (builder, signal_detail);
-            append_summary_part (builder, bitrate_detail);
-            append_summary_part (builder, scan_age_text);
             return builder.str;
         }
     }

@@ -437,7 +437,7 @@ namespace Log {
     }
 
     private static void flush_all () {
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < _targets.length; i++) {
             unowned var t = _targets[i];
             if (t != null && t.stream != null) {
                 t.stream.flush ();
@@ -446,7 +446,7 @@ namespace Log {
     }
 
     private static void close_all () {
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < _targets.length; i++) {
             unowned var t = _targets[i];
             if (t != null && t.stream != null) {
                 t.stream.flush ();
@@ -574,11 +574,8 @@ namespace Log {
         // Remove legacy single-file log and backups
         var legacy_dir = Path.build_filename (Environment.get_user_state_dir (), "wifiman");
         string[] legacy_names = {"wifiman.log", "wifiman.log.1",
-                                 "wifiman.log.2", "wifiman.log.3",
-                                 "logs" + Path.DIR_SEPARATOR_S + "wifiman-*"};
-        // Only rm the exact legacy filenames (not the glob)
+                                 "wifiman.log.2", "wifiman.log.3"};
         foreach (var name in legacy_names) {
-            if (name.has_prefix ("logs" + Path.DIR_SEPARATOR_S)) continue;
             var path = Path.build_filename (legacy_dir, name);
             if (FileUtils.test (path, FileTest.EXISTS)) {
                 FileUtils.unlink (path);

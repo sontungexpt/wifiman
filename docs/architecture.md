@@ -96,8 +96,7 @@ docs/
 
 - Maintains `GLib.ListStore items`
 - Tracks `scanning`, `has_networks`, `search_active`, `has_visible_networks`,
-  `captive_portal`, `connectivity_text`, `scan_freshness`, and
-  `last_successful_network`
+  `captive_portal`, `connectivity_text`, and `scan_freshness`
 - Rebuilds the list from current scan results only (`access_point != null`)
 - Annotates scan-result rows with saved-connection metadata when a matching
   profile exists in NetworkManager

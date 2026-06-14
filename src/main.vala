@@ -1,5 +1,3 @@
-using Gtk;
-
 /**
  * Application entry point.
  *
