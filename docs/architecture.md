@@ -522,7 +522,6 @@ Key style classes:
 - `.network-panel`
 - `.network-listbox`
 - `.network-row`
-- `.network-row-content`
 - `.hero-network`
 - `.status-badge`
 - `.network-metric`

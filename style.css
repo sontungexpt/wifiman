@@ -77,21 +77,28 @@ stack {
 }
 
 .premium-search {
-    min-height: 42px;
-    padding: 10px 16px;
+    min-height: 44px;
+    padding: 10px 14px;
     border-radius: 12px;
     background: @light-bg-white;
     color: @light-text-primary;
-    border: 1px solid rgba(0, 0, 0, 0.12);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-    transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .premium-search:focus-within {
-    background: @light-bg-white;
-    color: @light-text-primary;
     border-color: @light-accent;
-    box-shadow: 0 0 0 3px alpha(@light-accent, 0.15), 0 2px 8px rgba(0, 0, 0, 0.06);
+    box-shadow: 0 0 0 2px alpha(@light-accent, 0.15), 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+
+.premium-search image {
+    color: @light-text-muted;
+    margin-right: 2px;
+}
+
+.premium-search:focus-within image {
+    color: @light-accent;
 }
 
 .search-empty {
@@ -115,7 +122,7 @@ stack {
 }
 
 .network-listbox separator {
-    min-height: 1px;
+    min-height: 2px;
     margin: 0 16px;
     border: none;
     background: rgba(0, 0, 0, 0.10);
@@ -194,26 +201,22 @@ stack {
     color: @light-text-secondary;
 }
 
-.status-badge.warning,
-.network-metric.warning {
-    background: alpha(@light-warning, 0.1);
-    color: alpha(@light-warning, 0.88);
-}
-
-.status-badge.connected,
-.network-metric.connected {
+.status-badge.connected {
     background: alpha(@light-accent, 0.12);
     color: alpha(@light-accent, 0.95);
 }
 
-.status-badge.connecting,
-.network-metric.connecting {
+.status-badge.connecting {
     background: alpha(@light-success, 0.1);
     color: alpha(@light-success, 0.9);
 }
 
-.status-badge.failed,
-.network-metric.failed {
+.status-badge.saved {
+    background: alpha(@light-accent, 0.06);
+    color: @light-text-secondary;
+}
+
+.status-badge.failed {
     background: alpha(@light-error, 0.1);
     color: alpha(@light-error, 0.9);
 }
@@ -226,13 +229,14 @@ stack {
 .hero-network {
     padding: 16px 20px;
     border-radius: 14px;
-    background: linear-gradient(135deg, #3584e4, #1a5fb4);
-    box-shadow: 0 4px 12px rgba(35, 131, 228, 0.3);
+    background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%);
+    border: 1px solid alpha(white, 0.08);
+    box-shadow: 0 4px 20px rgba(30, 58, 138, 0.3);
     transition: box-shadow 0.2s ease;
 }
 
 .hero-network:hover {
-    box-shadow: 0 6px 18px rgba(35, 131, 228, 0.34);
+    box-shadow: 0 6px 24px rgba(30, 58, 138, 0.38);
 }
 
 .hero-network .ssid,
@@ -240,20 +244,21 @@ stack {
 .hero-network .status-badge,
 .hero-network .signal-icon {
     color: white;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 .hero-network .network-subtitle {
-    opacity: 0.72;
+    opacity: 0.88;
 }
 
 .hero-network .status-badge {
-    background: alpha(white, 0.14);
-    border: 1px solid alpha(white, 0.18);
+    background: alpha(white, 0.12);
+    border: 1px solid alpha(white, 0.2);
 }
 
 .hero-network .network-metric {
-    background: alpha(white, 0.14);
-    color: alpha(white, 0.9);
+    background: alpha(white, 0.12);
+    color: white;
 }
 
 .state-page {
@@ -281,10 +286,15 @@ stack {
 
 .dialog-header-title {
     color: @light-text-primary;
+    font-size: 14px;
+    font-weight: 600;
 }
 
 .dialog-network-name {
     color: @light-text-primary;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
 }
 
 /* ── Header Bar ─────────────────────────────────────────────── */
@@ -300,11 +310,6 @@ headerbar.dialog-headerbar .end {
     padding: 0;
     margin: 0;
     min-width: 0;
-}
-
-.dialog-header-title {
-    font-size: 14px;
-    font-weight: 600;
 }
 
 .dialog-close {
@@ -342,12 +347,6 @@ headerbar.dialog-headerbar > box.end * {
 }
 
 /* ── Network name heading (network actions dialog) ──────────── */
-
-.dialog-network-name {
-    font-size: 20px;
-    font-weight: 700;
-    letter-spacing: -0.01em;
-}
 
 .dialog-network-meta {
     font-size: 13px;
@@ -446,6 +445,7 @@ passwordentry button:hover {
 .details-expander {
     font-size: 13px;
     font-weight: 600;
+    color: @light-text-primary;
 }
 
 .detail-key {
@@ -545,9 +545,13 @@ passwordentry:focus-within {
 }
 
 entry > text > placeholder,
-passwordentry > text > placeholder,
+passwordentry > text > placeholder {
+    color: @light-text-muted;
+}
+
 entry.search > text > placeholder {
     color: @light-text-muted;
+    opacity: 0.7;
 }
 
 /* ── Popover (light mode) ───────────────────────────────────── */
@@ -587,10 +591,6 @@ popover .popover-content {
 }
 
 .popover-label {
-    color: @light-text-primary;
-}
-
-.details-expander {
     color: @light-text-primary;
 }
 
@@ -643,14 +643,21 @@ popover radio:checked {
 
 .dark-mode .premium-search {
     background: @dark-surface;
-    border: 1px solid alpha(white, 0.05);
+    border: 1px solid alpha(white, 0.06);
     color: #f3f4f6;
 }
 
 .dark-mode .premium-search:focus-within {
-    background: @dark-surface;
     border-color: @dark-accent;
-    box-shadow: 0 0 0 3px alpha(@dark-accent, 0.15);
+    box-shadow: 0 0 0 2px alpha(@dark-accent, 0.15);
+}
+
+.dark-mode .premium-search image {
+    color: @dark-muted;
+}
+
+.dark-mode .premium-search:focus-within image {
+    color: @dark-accent;
 }
 
 .dark-mode .network-panel {
@@ -661,7 +668,7 @@ popover radio:checked {
 
 .dark-mode .network-listbox separator {
     border: none;
-    min-height: 1px;
+    min-height: 2px;
     background: alpha(white, 0.05);
 }
 
@@ -706,25 +713,25 @@ popover radio:checked {
 }
 
 .dark-mode .hero-network {
-    background: linear-gradient(135deg, #1e40af, #1e3a8a);
+    background: linear-gradient(135deg, #020617 0%, #0f172a 50%, #1e3a8a 100%);
     border: 1px solid alpha(@dark-accent, 0.2);
-    box-shadow: 0 8px 20px -4px rgba(30, 64, 175, 0.4);
+    box-shadow: 0 8px 28px -4px rgba(0, 0, 0, 0.5);
 }
 
 .dark-mode .hero-network:hover {
-    background: linear-gradient(135deg, #1d4ed8, #1e3a8a);
-    box-shadow: 0 12px 24px -4px rgba(30, 64, 175, 0.5);
+    background: linear-gradient(135deg, #020617 0%, #1e3a8a 100%);
+    box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.6);
 }
 
 .dark-mode .hero-network .network-metric {
-    background: alpha(white, 0.12);
-    color: #f3f4f6;
+    background: alpha(white, 0.16);
+    color: white;
 }
 
 .dark-mode .hero-network .status-badge {
-    background: rgba(16, 185, 129, 0.2);
-    color: #34d399;
-    border: 1px solid rgba(52, 211, 153, 0.3);
+    background: alpha(white, 0.12);
+    color: white;
+    border: 1px solid alpha(white, 0.2);
 }
 
 .dark-mode .dialog-headerbar {
@@ -740,6 +747,10 @@ popover radio:checked {
     border: 1px solid alpha(white, 0.06);
     color: #f9fafb;
     caret-color: @dark-accent;
+}
+
+.dark-mode .dialog-input > text > placeholder {
+    color: @dark-muted;
 }
 
 .dark-mode .dialog-input:focus-within {

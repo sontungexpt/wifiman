@@ -207,5 +207,5 @@ public class Application : Gtk.Application {
 // Configuration constants
 namespace Config {
     public const string APPLICATION_ID = "io.github.sontungexpt.wifiman";
-    public const string VERSION = "0.2.0";
+    public const string VERSION = "0.3.0";
 }
