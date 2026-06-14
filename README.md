@@ -54,18 +54,6 @@ continue in the background. Use `--toggle` or re-launch to bring it back.
 Three modes via the gear menu: **System** (follows GNOME preference),
 **Light**, **Dark**. The choice persists in `~/.config/wifiman/settings.ini`.
 
-## Waybar integration
-
-Add to `~/.config/waybar/config.jsonc`:
-
-```jsonc
-{
-    "on-click": "~/.config/waybar/scripts/wifiman/build/wifiman --toggle"
-}
-```
-
-After rebuilding, kill the old process first: `pkill wifiman`
-
 ## Logging
 
 Logs are always written to `~/.local/state/wifiman/logs/`, split by
