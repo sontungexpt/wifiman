@@ -183,6 +183,11 @@ User clicks "Connect" (secured, dialog)
             └─ new?                            →  create_connection
                                                    + add_and_activate_connection_async
 
+User clicks "Network details" (hero row or right-click menu)
+  └─ show_network_actions () → manager.refresh_network_details (network)
+       │  (ensures IP/gateway/DNS are populated before the dialog reads them)
+       └─ detail dialog opens with current runtime data
+
 User clicks "Reconnect"
   └─ show_network_actions () → manager.reconnect_network.begin ()
        ├─ service.disconnect_network ()

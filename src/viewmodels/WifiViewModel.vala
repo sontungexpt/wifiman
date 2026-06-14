@@ -128,11 +128,6 @@ public class WifiViewModel : GLib.Object {
     public string scan_freshness { get; private set; default = "No recent scan"; }
 
     /**
-     * SSID of the last successfully connected network.
-     */
-    public string last_successful_network { get; private set; default = ""; }
-
-    /**
      * Whether the Wi-Fi radio is enabled.
      *
      * Setting this property toggles the radio via NetworkManagerService.
@@ -758,10 +753,6 @@ public class WifiViewModel : GLib.Object {
             network.active_connection = active;
             network.is_saved = true;
             network.saved_connection = connection as NM.RemoteConnection;
-            if (network.is_connected) {
-                last_successful_network = network.ssid;
-                notify_property ("last-successful-network");
-            }
         }
     }
 

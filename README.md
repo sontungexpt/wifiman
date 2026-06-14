@@ -14,7 +14,7 @@ is visible in scan results.
 - Search networks by SSID with live filtering
 - Auto-connect to known networks when detected (never disconnects the
   active connection automatically)
-- Captive portal detection with banner
+- Captive portal detection with banner and "Open Login Page" button
 - Network details: security, band, signal dBm, bitrate, IP, gateway, DNS
 - Connect / Reconnect / Disconnect / Forget actions
 - Wi-Fi toggle (turning Wi-Fi OFF closes the app)
@@ -22,6 +22,9 @@ is visible in scan results.
 - Background scanning every 45 seconds
 - Custom Cairo-drawn signal icon (works with any icon theme)
 - Multi‑file logging with automatic rotation and crash diagnostics
+- Portal login button opens browser for captive-portal sign-in
+- Fully themed dark mode with per-element styling (menus, badges, inputs, dialogs)
+- Automatic IP/gateway/DNS refresh in network details dialog
 
 ## Build
 

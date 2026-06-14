@@ -52,7 +52,8 @@ docs/
        2026-06-11.md            Dialog lifecycle, signal icon, auto-connect guards
        2026-06-12.md            Async logger, Cairo SignalIcon, bitrate fix, binding
        2026-06-13.md            Local-function ABI crash, manual-connect guard, SSID fix
-       2026-06-14.md            Log namespace rewrite, signal shutdown, dead code
+        2026-06-14.md            Log namespace rewrite, signal shutdown, dead code,
+                                  IP/DNS fix, dark mode polish
 ```
 
 ## Responsibilities
@@ -96,8 +97,7 @@ docs/
 
 - Maintains `GLib.ListStore items`
 - Tracks `scanning`, `has_networks`, `search_active`, `has_visible_networks`,
-  `captive_portal`, `connectivity_text`, `scan_freshness`, and
-  `last_successful_network`
+  `captive_portal`, `connectivity_text`, and `scan_freshness`
 - Rebuilds the list from current scan results only (`access_point != null`)
 - Annotates scan-result rows with saved-connection metadata when a matching
   profile exists in NetworkManager
@@ -112,7 +112,10 @@ docs/
   `has_visible_networks`
 - Schedules background scans with throttling
 - Refreshes derived runtime details for signal, speed, portal, IP, gateway, and
-  DNS state
+  DNS state via `update_runtime_details()`
+- Exposes `refresh_network_details(network)` to populate IP/gateway/DNS on a
+  specific network by resolving its active connection and calling
+  `update_runtime_details()` — used by the dialog builder in `MainWindow`
 - Forwards connect, reconnect, disconnect, forget, and scan actions
 - **Manual connect guard**: when `connect_network()` is called, sets
   `_manual_connecting = true` and `_manual_connecting_ssid = network.ssid` with a
@@ -357,9 +360,13 @@ model.
 
 ### Captive portal handling
 
-- Detect captive portal state separately from normal connection state
-- Show a non-blocking banner in the results shell
-- Provide an `Open Login Page` action when a portal is detected
+- Detected via NetworkManager connectivity state (`NM.ConnectivityState.PORTAL`)
+- Yellow warning banner shown between searchbar and network list with
+  warning icon and "Captive portal detected. Sign-in may be required."
+- "Open Login Page" button opens `http://nmcheck.gnome.org/` in the
+  default browser — the portal intercepts and redirects to the login page
+- Connected network row shows "Captive portal" warning text
+- Banner auto-hides when NM reports full connectivity
 
 ### Advanced network actions
 

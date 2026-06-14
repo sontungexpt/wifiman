@@ -20,7 +20,7 @@ public class MainWindow : Gtk.ApplicationWindow {
     private Gtk.Label connectivity_status_label;
     private Gtk.Box portal_banner;
     private Gtk.Label portal_label;
-    private Gtk.Button portal_refresh_button;
+    private Gtk.Button portal_login_button;
     private Gtk.Box hero_container;
     private Gtk.ListBox network_list;
     private Gtk.Box search_empty_box;
@@ -414,10 +414,15 @@ public class MainWindow : Gtk.ApplicationWindow {
         portal_label.wrap = true;
         portal_banner.append (portal_label);
 
-        portal_refresh_button = new Gtk.Button.with_label ("Refresh");
-        portal_refresh_button.add_css_class ("flat");
-        portal_refresh_button.clicked.connect (() => manager.scan.begin ());
-        portal_banner.append (portal_refresh_button);
+        portal_login_button = new Gtk.Button.with_label ("Open Login Page");
+        portal_login_button.clicked.connect (() => {
+            try {
+                GLib.AppInfo.launch_default_for_uri ("http://nmcheck.gnome.org/", null);
+            } catch (GLib.Error e) {
+                Log.warn ("MainWindow", "Failed to open browser: %s", e.message);
+            }
+        });
+        portal_banner.append (portal_login_button);
 
         content_shell.append (portal_banner);
 
