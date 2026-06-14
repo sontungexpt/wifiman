@@ -518,11 +518,11 @@ namespace Log {
     private static void crash_signal_handler (int sig) {
         string label;
         switch (sig) {
-            case Posix.SIGSEGV: label = "SIGSEGV"; break;
-            case Posix.SIGABRT: label = "SIGABRT"; break;
-            case Posix.SIGFPE:  label = "SIGFPE";  break;
-            case Posix.SIGBUS:  label = "SIGBUS";  break;
-            case Posix.SIGILL:  label = "SIGILL";  break;
+            case Posix.Signal.SEGV: label = "SIGSEGV"; break;
+            case Posix.Signal.ABRT: label = "SIGABRT"; break;
+            case Posix.Signal.FPE:  label = "SIGFPE";  break;
+            case Posix.Signal.BUS:  label = "SIGBUS";  break;
+            case Posix.Signal.ILL:  label = "SIGILL";  break;
             default:            label = "SIGNAL";   break;
         }
         var line = format_text (
@@ -647,11 +647,11 @@ namespace Log {
         GLib.Log.set_default_handler (glib_log_hook);
 
         // POSIX signal handlers
-        Posix.signal (Posix.SIGSEGV, crash_signal_handler);
-        Posix.signal (Posix.SIGABRT, crash_signal_handler);
-        Posix.signal (Posix.SIGFPE,  crash_signal_handler);
-        Posix.signal (Posix.SIGBUS,  crash_signal_handler);
-        Posix.signal (Posix.SIGILL,  crash_signal_handler);
+        Posix.signal (Posix.Signal.SEGV, crash_signal_handler);
+        Posix.signal (Posix.Signal.ABRT, crash_signal_handler);
+        Posix.signal (Posix.Signal.FPE,  crash_signal_handler);
+        Posix.signal (Posix.Signal.BUS,  crash_signal_handler);
+        Posix.signal (Posix.Signal.ILL,  crash_signal_handler);
     }
 
     // ═══════════════════════════════════════════════════════════════
