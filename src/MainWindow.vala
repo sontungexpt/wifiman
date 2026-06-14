@@ -415,7 +415,6 @@ public class MainWindow : Gtk.ApplicationWindow {
         portal_banner.append (portal_label);
 
         portal_login_button = new Gtk.Button.with_label ("Open Login Page");
-        portal_login_button.add_css_class ("flat");
         portal_login_button.clicked.connect (() => {
             try {
                 GLib.AppInfo.launch_default_for_uri ("http://nmcheck.gnome.org/", null);

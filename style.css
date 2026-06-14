@@ -29,7 +29,33 @@
 @define-color light-success #059669;
 @define-color light-error #dc2626;
 @define-color light-error-hover #ef4444;
-@define-color popover_bg_color @light-bg-white;
+
+/* ── Portal Login Button ─────────────────────────────────────── */
+
+.portal-banner button {
+    min-height: 34px;
+    padding: 0 16px;
+    border-radius: 10px;
+    font-weight: 600;
+    background: @light-warning;
+    color: white;
+    border: none;
+}
+
+.portal-banner button:hover {
+    background: #b45309;
+    box-shadow: 0 2px 8px alpha(@light-warning, 0.3);
+}
+
+.dark-mode .portal-banner button {
+    background: #f59e0b;
+    color: #1c1917;
+    border: none;
+}
+
+.dark-mode .portal-banner button:hover {
+    background: #fbbf24;
+}
 
 /* ── Base layout ─────────────────────────────────────────────── */
 
