@@ -53,7 +53,7 @@ public class MainWindow : Gtk.ApplicationWindow {
             default_height: 680
         );
 
-        Logger.info ("MainWindow", "Initializing MainWindow");
+        Log.info ("MainWindow", "Initializing MainWindow");
         load_css ();
 
         var nm_service = new NetworkManagerService ();
@@ -83,8 +83,9 @@ public class MainWindow : Gtk.ApplicationWindow {
     private void quit_application () {
         if (_quitting) return;
         _quitting = true;
-        Logger.info ("MainWindow", "Shutting down application");
+        Log.info ("MainWindow", "Shutting down application");
         manager.shutdown ();
+        Log.shutdown ();
         application.quit ();
     }
 
@@ -92,7 +93,7 @@ public class MainWindow : Gtk.ApplicationWindow {
      * Toggle window visibility between shown and hidden.
      */
     public void toggle_visibility () {
-        Logger.debug ("MainWindow", "Toggling window visibility, currently: %s", visible.to_string ());
+        Log.debug ("MainWindow", "Toggling window visibility, currently: %s", visible.to_string ());
         if (visible) {
             quit_application ();
         } else {
@@ -104,7 +105,7 @@ public class MainWindow : Gtk.ApplicationWindow {
      * Load the application CSS from the GResource bundle.
      */
     private void load_css () {
-        Logger.debug ("MainWindow", "Loading CSS");
+        Log.debug ("MainWindow", "Loading CSS");
         var provider = new Gtk.CssProvider ();
         provider.load_from_resource ("/io/github/sontungexpt/wifiman/style.css");
         Gtk.StyleContext.add_provider_for_display (
@@ -179,7 +180,7 @@ public class MainWindow : Gtk.ApplicationWindow {
             );
             menu_popover.get_style_context().add_provider (css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
         } catch (GLib.Error e) {
-            Logger.warn ("MainWindow", "Failed to load popover CSS override: %s", e.message);
+            Log.warn ("MainWindow", "Failed to load popover CSS override: %s", e.message);
         }
 
         var box = new Gtk.Box (Gtk.Orientation.VERTICAL, 12);
@@ -474,6 +475,15 @@ public class MainWindow : Gtk.ApplicationWindow {
             error_subtitle.label = message;
             stack.visible_child_name = "error";
         });
+        manager.connect_failed.connect ((network, message) => {
+            // Only create a new dialog if none is open yet (e.g. first
+            // failure).  If a dialog is already showing it handles the
+            // error via its own connect_failed handler attached in
+            // show_connect_dialog().
+            if (!_connect_dialog_active) {
+                show_connect_dialog (network, message);
+            }
+        });
         update_state ();
     }
 
@@ -484,7 +494,7 @@ public class MainWindow : Gtk.ApplicationWindow {
      * based on the current ViewModel state.
      */
     private void update_state () {
-        Logger.debug ("MainWindow", "Updating state: scanning=%s, has_networks=%s", manager.scanning.to_string (), manager.has_networks.to_string ());
+        Log.debug ("MainWindow", "Updating state: scanning=%s, has_networks=%s", manager.scanning.to_string (), manager.has_networks.to_string ());
         refresh_button.sensitive = !manager.scanning;
         spinner.spinning = manager.scanning;
         spinner.visible = manager.scanning;
@@ -524,7 +534,7 @@ public class MainWindow : Gtk.ApplicationWindow {
      * timeout before calling set_search_text.
      */
     private void queue_search_update () {
-        Logger.debug ("MainWindow", "Queueing search update");
+        Log.debug ("MainWindow", "Queueing search update");
         if (search_debounce_id != 0) {
             Source.remove (search_debounce_id);
             search_debounce_id = 0;
@@ -549,7 +559,7 @@ public class MainWindow : Gtk.ApplicationWindow {
             return;
         }
 
-        Logger.debug ("MainWindow", "Rendering networks");
+        Log.debug ("MainWindow", "Rendering networks");
         if (hero_container == null || network_list == null) {
             return;
         }
@@ -557,8 +567,12 @@ public class MainWindow : Gtk.ApplicationWindow {
         _rendering = true;
         _render_needed = false;
 
+        Log.debug ("MainWindow", "  items_in_store=%d removing_all_rows=1",
+            manager.items.get_n_items ());
         clear_container (hero_container);
         network_list.remove_all ();
+        Log.debug ("MainWindow", "  rows removed, populating from %d items",
+            manager.items.get_n_items ());
 
         bool show_search_empty = manager.search_active && !manager.has_visible_networks;
         search_empty_box.visible = show_search_empty;
@@ -698,7 +712,7 @@ public class MainWindow : Gtk.ApplicationWindow {
      * @param row  The activated Gtk.ListBoxRow.
      */
     private void on_row_activated (Gtk.ListBoxRow row) {
-        Logger.info ("MainWindow", "Network row activated");
+        Log.info ("MainWindow", "Network row activated");
         var child = row.get_child ();
         var network_row = child as WifiNetworkRow;
         if (network_row == null || network_row.item_network == null) {
@@ -718,10 +732,10 @@ public class MainWindow : Gtk.ApplicationWindow {
      */
     private void activate_network (WifiNetwork? network) {
         if (network == null) {
-            Logger.warn ("MainWindow", "activate_network called with null network");
+            Log.warn ("MainWindow", "activate_network called with null network");
             return;
         }
-        Logger.info ("MainWindow", "Activating network: %s", network.ssid);
+        Log.info ("MainWindow", "Activating network: %s", network.ssid);
 
         if (network.is_connected || network.is_saved) {
             show_network_actions (network);
@@ -744,10 +758,10 @@ public class MainWindow : Gtk.ApplicationWindow {
      */
     private async void connect_network (WifiNetwork network, string? password = null, string? username = null) {
         try {
-            Logger.info ("MainWindow", "Connecting to network: %s", network.ssid);
+            Log.info ("MainWindow", "Connecting to network: %s", network.ssid);
             yield manager.connect_network (network, password, username);
         } catch (GLib.Error e) {
-            Logger.warn ("MainWindow", "Failed to connect to '%s': %s", network.ssid, e.message);
+            Log.warn ("MainWindow", "Failed to connect to '%s': %s", network.ssid, e.message);
             error_subtitle.label = e.message;
             stack.visible_child_name = "error";
         }
@@ -760,8 +774,8 @@ public class MainWindow : Gtk.ApplicationWindow {
      *
      * @param network  The secured network to connect to.
      */
-    private void show_connect_dialog (WifiNetwork network) {
-        Logger.info ("MainWindow", "Showing connect dialog for: %s", network.ssid);
+    private void show_connect_dialog (WifiNetwork network, string? initial_error = null) {
+        Log.info ("MainWindow", "Showing connect dialog for: %s", network.ssid);
         var dialog = new Gtk.Window ();
         dialog.title = network.ssid;
         dialog.transient_for = this;
@@ -807,6 +821,11 @@ public class MainWindow : Gtk.ApplicationWindow {
         error_box.append (error_label);
         body.append (error_box);
 
+        if (initial_error != null) {
+            error_label.label = initial_error;
+            error_box.visible = true;
+        }
+
         var actions = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 10);
         actions.add_css_class ("dialog-actions");
         actions.halign = Gtk.Align.END;
@@ -819,7 +838,24 @@ public class MainWindow : Gtk.ApplicationWindow {
         actions.append (connect);
         body.append (actions);
 
+        bool connect_initiated = false;
+        uint success_close_id = 0;
+        ulong connect_failed_id = 0;
+
         cancel.clicked.connect (() => dialog.close ());
+
+        connect_failed_id = manager.connect_failed.connect ((failed_net, msg) => {
+            if (failed_net.ssid != network.ssid) {
+                return;
+            }
+            if (success_close_id != 0) {
+                Source.remove (success_close_id);
+                success_close_id = 0;
+            }
+            error_label.label = msg;
+            error_box.visible = true;
+            connect.sensitive = true;
+        });
 
         connect.clicked.connect (() => {
             connect.sensitive = false;
@@ -831,7 +867,14 @@ public class MainWindow : Gtk.ApplicationWindow {
                 }
                 try {
                     manager.connect_network.end (res);
-                    dialog.close ();
+                    connect_initiated = true;
+                    success_close_id = Timeout.add (1500, () => {
+                        if (dialog.visible) {
+                            dialog.close ();
+                        }
+                        success_close_id = 0;
+                        return Source.REMOVE;
+                    });
                 } catch (GLib.Error e) {
                     error_label.label = e.message;
                     error_box.visible = true;
@@ -839,36 +882,21 @@ public class MainWindow : Gtk.ApplicationWindow {
                 }
             });
         });
-
-        password_entry.activate.connect (() => {
-            connect.sensitive = false;
-            error_box.visible = false;
-            var username = username_entry != null ? username_entry.text : null;
-            manager.connect_network.begin (network, password_entry.text, username, (obj, res) => {
-                if (!_connect_dialog_active) {
-                    return;
-                }
-                try {
-                    manager.connect_network.end (res);
-                    dialog.close ();
-                } catch (GLib.Error e) {
-                    error_label.label = e.message;
-                    error_box.visible = true;
-                    connect.sensitive = true;
-                }
-            });
-        });
+        password_entry.activate.connect (() => connect.clicked ());
 
         _connect_dialog_active = true;
         dialog.close_request.connect (() => {
             _connect_dialog_active = false;
-            manager.cancel_manual_connect ();
+            manager.disconnect (connect_failed_id);
+            if (!connect_initiated) {
+                manager.cancel_manual_connect ();
+            }
             dialog.destroy ();
             return true;
         });
 
         dialog.present ();
-        password_entry.grab_focus ();
+        dialog.set_focus (password_entry);
     }
 
     /**
@@ -881,7 +909,7 @@ public class MainWindow : Gtk.ApplicationWindow {
      * @param network  The network to show details for.
      */
     private void show_network_actions (WifiNetwork network) {
-        Logger.info ("MainWindow", "Showing network actions for: %s", network.ssid);
+        Log.info ("MainWindow", "Showing network actions for: %s", network.ssid);
         var dialog = new Gtk.Window ();
         dialog.title = network.ssid;
         dialog.transient_for = this;

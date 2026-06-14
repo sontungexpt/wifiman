@@ -150,7 +150,7 @@ User clicks "Connect" (open network)
   └─ activate_network ()
        └─ connect_network.begin ()
             └─ manager.connect_network ()
-                 └─ service.user_connect ()
+                 └─ service.connect_network ()
                       └─ client.add_and_activate_connection_async ()
 
 User clicks "Connect" (secured, dialog)
@@ -175,28 +175,31 @@ User clicks "Connect" (secured, dialog)
   └─ dialog "Connect" → manager.connect_network.begin (password)
        ├─ _manual_connecting = true
        ├─ _manual_connect_timeout_id = Timeout.add (120s, clear flags)
-       └─ service.user_connect ()
-            ├─ existing saved?  →  apply_secrets + commit_changes_async
-            │                       →  activate_connection_async
-            └─ new?  →  create_connection + add_and_activate_connection_async
+       └─ service.connect_network ()
+            ├─ existing saved + has password?  →  create_connection
+            │                                    + add_and_activate_connection_async
+            │                                    (deletes old saved connection)
+            ├─ existing saved + no password?   →  activate_connection_async (existing)
+            └─ new?                            →  create_connection
+                                                   + add_and_activate_connection_async
 
 User clicks "Reconnect"
   └─ show_network_actions () → manager.reconnect_network.begin ()
-       ├─ service.user_disconnect ()
+       ├─ service.disconnect_network ()
        │    └─ client.deactivate_connection_async ()
-       └─ service.user_connect ()
+       └─ service.connect_network ()
             └─ client.activate_connection_async ()
 
 User clicks "Disconnect"
   └─ show_network_actions ()
        ├─ manager.record_disconnect (ssid)  ← sets 30s cooldown
        └─ manager.disconnect_network.begin ()
-            └─ service.user_disconnect ()
+            └─ service.disconnect_network ()
                  └─ client.deactivate_connection_async ()
 
 User clicks "Forget"
   └─ show_network_actions () → manager.forget_network.begin ()
-       └─ service.user_forget ()
+       └─ service.forget_network ()
             └─ connection.delete_async ()
 
 User toggles Wi-Fi
@@ -239,29 +242,64 @@ Key: the `_connect_dialog_active` flag is checked in the async callback
 before touching dialog widgets. If the dialog was already closed, the
 callback returns early — no crash on destroyed widgets.
 
+## Connection failure flow
+
+```
+NM ActiveConnection enters DEACTIVATED state
+       │
+       ▼
+  service.state_changed signal fires
+       │
+       ├─ state == DEACTIVATED && type == 802-11-wireless?
+       │    └─ resolve_ssid_from_active () → ssid string
+       │         └─ connection_failed (ssid, reason)  ← emitted
+       │
+       ▼
+  WifiViewModel.on_connection_failed ()
+       │
+       ├─ _manual_connecting && ssid == _manual_connecting_ssid?
+       │    │  YES → clear flags, emit connect_failed (network, message)
+       │    │  NO  → return (ignore stale / auto-connect failures)
+       │    ▼
+       └─ MainWindow.show_connect_dialog () or dialog.connect_failed handler
+            ├─ dialog exists?  →  update error box inline, re-enable button
+            └─ no dialog?      →  create new dialog with initial error shown
+```
+
+Auto-connect failures and stale DEACTIVATED signals from superseded
+ActiveConnections are silently ignored — the `_manual_connecting` flag
+must be set and match the failing SSID for the signal to reach the user.
+
 ## Manual connect guard
 
 ```
 WifiViewModel.connect_network ()
        │
-       ├─ _manual_connecting = true
-       ├─ _manual_connecting_ssid = network.ssid
-       ├─ Timeout.add (120s, clear flags)  ← safety timeout
+       ├─ _manual_connecting = false         ← clear flags first so stale
+       ├─ _manual_connecting_ssid = ""          DEACTIVATED from the old AC
+       ├─ Source.remove (timeout)               (fired during the async yield
+       │                                        below) are ignored
+       ├─ yield service.connect_network ()
+       │    ├─ on error → throw (flags stay false)
+       │    └─ on success → fall through to Idle
        │
-       ├─ on success:
-       │    └─ try_auto_connect_all () detects is_connected → clears flags
-       │
-       ├─ on error:
-       │    ├─ clears flags immediately
-       │    └─ re-throws error
-       │
-       └─ during manual connect:
-            try_auto_connect_all () sees _manual_connecting → returns early
-            (no auto-connect races against user password flow)
+       └─ Idle.add (() => {
+              _manual_connecting = true        ← set on idle so all pending
+              _manual_connecting_ssid = ssid     DEACTIVATED signals from the
+              Timeout.add (120s, clear flags)    superseded AC are already
+              return REMOVE                      dispatched (and ignored)
+           })
+              │
+              ├─ on subsequent DEACTIVATED:
+              │    on_connection_failed () checks _manual_connecting + SSID match
+              │    → emits connect_failed signal
+              │
+              └─ try_auto_connect_all () sees _manual_connecting → returns early
+                   (no auto-connect races against user password flow)
 ```
 
 The manual connect guard ensures that auto-connect cannot interfere with
 a user-initiated password-based connection attempt. When the dialog is
 dismissed, `cancel_manual_connect()` is called to release the guard.
 
-All connection-mutating calls go through `NetworkManagerService.user_*` methods, which are only reachable from explicit user UI actions.
+All connection-mutating calls go through `NetworkManagerService` methods which are only reachable from explicit user UI actions or auto-connect logic.

@@ -55,6 +55,17 @@ public class NetworkManagerService : GLib.Object {
      */
     public signal void error (string message);
 
+    /**
+     * Emitted when an active connection reaches DEACTIVATED state.
+     *
+     * Only emitted for 802-11-wireless connections.  Consumers should
+     * check whether this corresponds to their manual connect attempt.
+     *
+     * @param ssid    The SSID of the failed connection.
+     * @param reason  The reason the connection was deactivated.
+     */
+    public signal void connection_failed (string ssid, NM.ActiveConnectionStateReason reason);
+
     private NM.Client? client;
     private ulong device_added_id = 0;
     private ulong device_removed_id = 0;
@@ -112,7 +123,7 @@ public class NetworkManagerService : GLib.Object {
      */
     public NetworkManagerService () {
         try {
-            Logger.info ("NetworkManager", "Initializing NetworkManager client");
+            Log.info ("NetworkManager", "Initializing NetworkManager client");
             client = new NM.Client (null);
             available = true;
             connect_client_signals ();
@@ -126,15 +137,13 @@ public class NetworkManagerService : GLib.Object {
             }
         } catch (GLib.Error e) {
             available = false;
-            Logger.warn ("NetworkManager", "Failed to initialize NM.Client: %s", e.message);
+            Log.warn ("NetworkManager", "Failed to initialize NM.Client: %s", e.message);
         }
     }
 
     /**
-     * Disconnect all signals on cleanup.
-     *
-     * g_signal_connect_object auto-disconnects during finalization,
-     * so no manual cleanup is needed here.
+     * Destructor — all signal cleanup is done in shutdown() or by
+     * g_signal_connect_object's weak-ref mechanism during finalization.
      */
     ~NetworkManagerService () {
     }
@@ -142,14 +151,75 @@ public class NetworkManagerService : GLib.Object {
     /**
      * Shut down the service.
      *
-     * Signal handlers and NM object references are cleaned up by
-     * Vala-generated finalize code and the g_signal_connect_object
-     * weak-ref mechanism during finalization.  Manually freeing
-     * NM objects here would leave dangling pointers in the
-     * g_signal_connect_object internal tracking, causing
-     * g_signal_handler_disconnect: assertion failures at shutdown.
+     * Disconnects all signal handlers — from NM.Client, per-device,
+     * and per-active-connection — so that callbacks stop firing before
+     * the ViewModel stops listening.
+     *
+     * Per-device and per-active-connection signal handlers are NOT
+     * disconnected in the device_removed / active_connection_removed
+     * callbacks because the NM proxy objects may already be partially
+     * finalized.  Here in shutdown(), however, the NM.Client and all
+     * its sub-objects are still alive, so it is safe to disconnect.
      */
     public void shutdown () {
+        Log.info ("NetworkManager", "Shutting down NetworkManager service");
+        if (client == null) return;
+
+        if (device_added_id != 0) {
+            SignalHandler.disconnect (client, device_added_id);
+            device_added_id = 0;
+        }
+        if (device_removed_id != 0) {
+            SignalHandler.disconnect (client, device_removed_id);
+            device_removed_id = 0;
+        }
+        if (connection_added_id != 0) {
+            SignalHandler.disconnect (client, connection_added_id);
+            connection_added_id = 0;
+        }
+        if (connection_removed_id != 0) {
+            SignalHandler.disconnect (client, connection_removed_id);
+            connection_removed_id = 0;
+        }
+        if (active_connection_added_id != 0) {
+            SignalHandler.disconnect (client, active_connection_added_id);
+            active_connection_added_id = 0;
+        }
+        if (active_connection_removed_id != 0) {
+            SignalHandler.disconnect (client, active_connection_removed_id);
+            active_connection_removed_id = 0;
+        }
+        if (wireless_enabled_id != 0) {
+            SignalHandler.disconnect (client, wireless_enabled_id);
+            wireless_enabled_id = 0;
+        }
+        if (connectivity_notify_id != 0) {
+            SignalHandler.disconnect (client, connectivity_notify_id);
+            connectivity_notify_id = 0;
+        }
+
+        // Disconnect per-device signal handlers.  Unlike during a
+        // device_removed callback (where the NM proxy may already be
+        // partially finalized), at shutdown time the NM.Client and all
+        // its sub-objects are still alive, so it is safe to disconnect.
+        Log.debug ("NetworkManager", "Disconnecting %d per-device signal handler sets",
+            wifi_signal_ids.size ());
+        wifi_signal_ids.foreach ((device, ids) => {
+            SignalHandler.disconnect (device, ids.access_point_added_id);
+            SignalHandler.disconnect (device, ids.access_point_removed_id);
+            SignalHandler.disconnect (device, ids.active_access_point_id);
+            SignalHandler.disconnect (device, ids.state_id);
+            SignalHandler.disconnect (device, ids.notify_id);
+        });
+        wifi_signal_ids.remove_all ();
+
+        // Same for active-connection signal handlers.
+        Log.debug ("NetworkManager", "Disconnecting %d active-connection signal handlers",
+            active_signal_ids.size ());
+        active_signal_ids.foreach ((active, id) => {
+            SignalHandler.disconnect (active, id);
+        });
+        active_signal_ids.remove_all ();
     }
 
     /**
@@ -203,11 +273,11 @@ public class NetworkManagerService : GLib.Object {
      */
     public async void request_scan () throws GLib.Error {
         if (client == null) {
-            Logger.warn ("NetworkManager", "request_scan called but client is null");
+            Log.warn ("NetworkManager", "request_scan called but client is null");
             throw new NetworkManagerServiceError.UNAVAILABLE ("NetworkManager is unavailable");
         }
 
-        Logger.info ("NetworkManager", "Requesting Wi-Fi scan");
+        Log.info ("NetworkManager", "Requesting Wi-Fi scan");
 
         scan_started ();
         try {
@@ -242,14 +312,14 @@ public class NetworkManagerService : GLib.Object {
      */
     public async void connect_network (WifiNetwork network, string? password, string? username) throws GLib.Error {
         if (client == null || network.access_point == null || network.device == null) {
-            Logger.warn ("NetworkManager", "connect_network: prerequisites missing: client=%s ap=%s device=%s",
+            Log.warn ("NetworkManager", "connect_network: prerequisites missing: client=%s ap=%s device=%s",
                 (client != null).to_string (),
                 (network.access_point != null).to_string (),
                 (network.device != null).to_string ());
             throw new NetworkManagerServiceError.CONNECTION_FAILED ("Network is no longer available");
         }
 
-        Logger.info ("NetworkManager", "connect_network: ssid='%s' has_password=%s has_username=%s saved=%s",
+        Log.info ("NetworkManager", "connect_network: ssid='%s' has_password=%s has_username=%s saved=%s",
             network.ssid,
             (password != null && password.length > 0).to_string (),
             (username != null && username.length > 0).to_string (),
@@ -257,25 +327,34 @@ public class NetworkManagerService : GLib.Object {
 
         var existing = network.saved_connection;
         if (existing != null) {
-            Logger.info ("NetworkManager", "Using saved connection for: %s", network.ssid);
-            apply_secrets (existing, network, password, username);
-
             if (password != null && password.length > 0) {
-                Logger.info ("NetworkManager", "Committing password update for saved connection");
-                yield existing.commit_changes_async (true, null);
+                // Create a fresh connection with the new password and
+                // activate it directly.  Bypasses NM's internal connection
+                // cache, which may hold the old password after an update.
+                Log.info ("NetworkManager", "Creating new connection with updated password for: %s", network.ssid);
+                var new_conn = create_connection (network, password, username);
+                yield client.add_and_activate_connection_async (new_conn, network.device, network.access_point.get_path (), null);
+                Log.info ("NetworkManager", "add_and_activate_connection_async succeeded for: %s", network.ssid);
+                // Remove the old saved connection now that it is superseded.
+                try {
+                    yield existing.delete_async (null);
+                } catch (GLib.Error e) {
+                    Log.warn ("NetworkManager", "Failed to delete old saved connection: %s", e.message);
+                }
+                return;
             }
 
-            Logger.info ("NetworkManager", "Calling activate_connection_async for: %s", network.ssid);
+            Log.info ("NetworkManager", "Using saved connection for: %s", network.ssid);
             yield client.activate_connection_async (existing, network.device, network.access_point.get_path (), null);
-            Logger.info ("NetworkManager", "activate_connection_async succeeded for: %s", network.ssid);
+            Log.info ("NetworkManager", "activate_connection_async succeeded for: %s", network.ssid);
             return;
         }
 
-        Logger.info ("NetworkManager", "Creating new connection for: %s", network.ssid);
+        Log.info ("NetworkManager", "Creating new connection for: %s", network.ssid);
         var connection = create_connection (network, password, username);
-        Logger.info ("NetworkManager", "Calling add_and_activate_connection_async for: %s", network.ssid);
+        Log.info ("NetworkManager", "Calling add_and_activate_connection_async for: %s", network.ssid);
         yield client.add_and_activate_connection_async (connection, network.device, network.access_point.get_path (), null);
-        Logger.info ("NetworkManager", "add_and_activate_connection_async succeeded for: %s", network.ssid);
+        Log.info ("NetworkManager", "add_and_activate_connection_async succeeded for: %s", network.ssid);
     }
 
     /**
@@ -317,7 +396,7 @@ public class NetworkManagerService : GLib.Object {
      * notifications for wireless-enabled and connectivity.
      */
     private void connect_client_signals () {
-        Logger.debug ("NetworkManager", "Connecting client signals");
+        Log.debug ("NetworkManager", "Connecting client signals");
         device_added_id = client.device_added.connect ((device) => {
             if (device is NM.DeviceWifi) {
                 connect_wifi_device ((NM.DeviceWifi) device);
@@ -358,10 +437,10 @@ public class NetworkManagerService : GLib.Object {
      */
     private void connect_wifi_device (NM.DeviceWifi device) {
         if (wifi_signal_ids.contains (device)) {
-            Logger.debug ("NetworkManager", "Wi-Fi device already connected: %s", device.get_iface ());
+            Log.debug ("NetworkManager", "Wi-Fi device already connected: %s", device.get_iface ());
             return;
         }
-        Logger.debug ("NetworkManager", "Connecting Wi-Fi device: %s", device.get_iface ());
+        Log.debug ("NetworkManager", "Connecting Wi-Fi device: %s", device.get_iface ());
 
         var ids = new WifiDeviceSignals ();
         ids.access_point_added_id = device.access_point_added.connect (() => changed ());
@@ -390,6 +469,9 @@ public class NetworkManagerService : GLib.Object {
      * signal handlers automatically when the proxy is eventually
      * finalized by libnm.
      *
+     * Note: during service shutdown() we DO disconnect these handlers
+     * because at that point all NM proxy objects are still alive.
+     *
      * @param device  The device that was removed.
      */
     private void disconnect_wifi_device (NM.DeviceWifi device) {
@@ -405,8 +487,35 @@ public class NetworkManagerService : GLib.Object {
         if (active_signal_ids.contains (active)) {
             return;
         }
-        var id = active.state_changed.connect (() => changed ());
+        var id = active.state_changed.connect ((state, reason) => {
+            if ((NM.ActiveConnectionState) state == NM.ActiveConnectionState.DEACTIVATED
+                && active.get_connection_type () == "802-11-wireless") {
+                var ssid = resolve_ssid_from_active (active);
+                if (ssid != null) {
+                    connection_failed (ssid, (NM.ActiveConnectionStateReason) reason);
+                }
+            }
+            changed ();
+        });
         active_signal_ids.insert (active, id);
+    }
+
+    /**
+     * Extract the SSID string from an active connection.
+     *
+     * @param active  The active connection to inspect.
+     * @return The SSID as a string, or null if it cannot be resolved.
+     */
+    private string? resolve_ssid_from_active (NM.ActiveConnection active) {
+        var connection = active.get_connection ();
+        if (connection == null) {
+            return null;
+        }
+        var wifi = connection.get_setting_wireless ();
+        if (wifi == null || wifi.get_ssid () == null) {
+            return null;
+        }
+        return WifiUtils.ssid_to_string (wifi.get_ssid ());
     }
 
     /**
@@ -417,6 +526,9 @@ public class NetworkManagerService : GLib.Object {
      * proxy passed by the signal may already be partially finalized.
      * We just drop our tracking and let GObject clean up the signal
      * handler during the proxy's eventual finalization.
+     *
+     * Note: during service shutdown() we DO disconnect these handlers
+     * because at that point all NM proxy objects are still alive.
      *
      * @param active  The active connection that was removed.
      */
@@ -462,38 +574,6 @@ public class NetworkManagerService : GLib.Object {
         connection.add_setting (s_ipv6);
 
         return connection;
-    }
-
-    /**
-     * Apply password and username secrets to an existing NM
-     * connection.
-     *
-     * Only sets secrets if a non-empty password is provided.
-     *
-     * @param connection  The existing NM connection to modify.
-     * @param network     The network, used to determine enterprise vs personal.
-     * @param password    The new password (or null to skip).
-     * @param username    The new 802.1X username (or null).
-     */
-    private void apply_secrets (NM.Connection connection, WifiNetwork network, string? password, string? username) {
-        if (password == null || password.length == 0) {
-            return;
-        }
-
-        if (network.enterprise) {
-            var s_8021x = connection.get_setting_802_1x ();
-            if (s_8021x != null) {
-                if (username != null && username.length > 0) {
-                    s_8021x.identity = username;
-                }
-                s_8021x.password = password;
-            }
-        } else {
-            var s_wsec = connection.get_setting_wireless_security ();
-            if (s_wsec != null) {
-                s_wsec.psk = password;
-            }
-        }
     }
 
     /**

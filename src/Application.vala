@@ -14,8 +14,9 @@ public class Application : Gtk.Application {
     /**
      * Whether debug logging is enabled.
      *
-     * Set via the --debug command-line flag.  When true, verbose
-     * log output is written to ~/.local/state/wifiman/wifiman.log.
+     * Set via the --debug command-line flag.  When true, the minimum
+     * log level is lowered to DEBUG so that verbose output appears in
+     * the category log files.
      */
     public bool debug_mode { get; private set; default = false; }
 
@@ -31,7 +32,7 @@ public class Application : Gtk.Application {
         );
         add_main_option ("version", 0, GLib.OptionFlags.NONE, GLib.OptionArg.NONE, "Show version information", null);
         add_main_option ("toggle", 0, GLib.OptionFlags.NONE, GLib.OptionArg.NONE, "Toggle window visibility", null);
-        add_main_option ("debug", 'd', GLib.OptionFlags.NONE, GLib.OptionArg.NONE, "Enable debug logging to ~/.config/wifiman/debug.log", null);
+        add_main_option ("debug", 'd', GLib.OptionFlags.NONE, GLib.OptionArg.NONE, "Enable verbose logging (DEBUG level output to log files)", null);
         add_action_entries (action_entries, this);
     }
 
@@ -42,7 +43,7 @@ public class Application : Gtk.Application {
      * already-running primary instance.
      */
     private void on_toggle_action () {
-        Logger.info ("Application", "Toggle action received");
+        Log.info ("Application", "Toggle action received");
         var window = get_active_window () as MainWindow;
         if (window != null) {
             window.toggle_visibility ();
@@ -57,7 +58,7 @@ public class Application : Gtk.Application {
      * and presents the window.
      */
     protected override void activate () {
-        Logger.info ("Application", "Activating application window");
+        Log.info ("Application", "Activating application window");
         var window = get_active_window ();
         if (window == null) {
             window = new MainWindow (this);
@@ -96,8 +97,13 @@ public class Application : Gtk.Application {
             debug_mode = true;
         }
 
-        Logger.init (debug_mode);
-        Logger.info ("Application", "Started (debug=%s)", debug_mode.to_string ());
+        var log_config = new Log.Config ();
+        if (debug_mode) {
+            log_config.level = Log.Level.DEBUG;
+        }
+        Log.init (log_config, debug_mode);
+        Log.install_crash_handler ();
+        Log.info ("Application", "Started (debug=%s)", debug_mode.to_string ());
 
         activate ();
         return 0;
@@ -109,7 +115,7 @@ public class Application : Gtk.Application {
      * @param dark  Whether to apply the dark-mode class.
      */
     private void apply_class_to_windows (bool dark) {
-        Logger.debug ("Application", "Applying class to windows: dark=%s", dark.to_string ());
+        Log.debug ("Application", "Applying class to windows: dark=%s", dark.to_string ());
         foreach (var w in get_windows ()) {
             if (dark) w.add_css_class ("dark-mode");
             else w.remove_css_class ("dark-mode");
@@ -125,7 +131,7 @@ public class Application : Gtk.Application {
      * @param scheme  One of "dark", "light", or "system".
      */
     public void apply_color_scheme (string scheme) {
-        Logger.info ("Application", "Applying color scheme: %s", scheme);
+        Log.info ("Application", "Applying color scheme: %s", scheme);
         bool is_dark = false;
         switch (scheme) {
             case "dark":
@@ -192,7 +198,7 @@ public class Application : Gtk.Application {
             keyfile.set_string ("Settings", "color-scheme", scheme);
             keyfile.save_to_file (config_file);
         } catch (GLib.Error e) {
-            Logger.warn ("Application", "Failed to save color scheme to settings.ini: %s", e.message);
+            Log.warn ("Application", "Failed to save color scheme to settings.ini: %s", e.message);
         }
     }
 
@@ -201,5 +207,5 @@ public class Application : Gtk.Application {
 // Configuration constants
 namespace Config {
     public const string APPLICATION_ID = "io.github.sontungexpt.wifiman";
-    public const string VERSION = "0.1.0";
+    public const string VERSION = "0.2.0";
 }

@@ -10,6 +10,7 @@ gnome = import('gnome')
 gtk4_dep = dependency('gtk4')
 nm_dep = dependency('libnm')
 gio_dep = dependency('gio-2.0')
+posix_dep = meson.get_compiler('vala').find_library('posix', required: false)
 
 # Source files
 src_files = [
@@ -39,6 +40,6 @@ resources = gnome.compile_resources('wifi_resources',
 executable(meson.project_name(),
   src_files,
   resources,
-  dependencies: [gtk4_dep, nm_dep, gio_dep],
+  dependencies: [gtk4_dep, nm_dep, gio_dep, posix_dep],
   install: true
 )

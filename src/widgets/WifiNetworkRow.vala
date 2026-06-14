@@ -27,7 +27,7 @@ public class WifiNetworkRow : Gtk.Box {
     private Gtk.Label primary_status_label;
     private Gtk.Label security_status_label;
 
-    private WifiNetwork? network;
+    private unowned WifiNetwork? network;
     private GLib.Binding? signal_binding = null;
     private ulong connected_id = 0;
     private ulong saved_id = 0;
@@ -42,16 +42,16 @@ public class WifiNetworkRow : Gtk.Box {
     private ulong warning_id = 0;
     private ulong health_id = 0;
 
-    /**
-     * Dispose — ensures signal handlers and bindings are cleaned up
-     * while the row and network are still in a valid state.
-     *
-     * This is the correct GObject lifecycle stage for dropping references
-     * and disconnecting signals. We call unlink_network() to ensure
-     * all GObject-level connections are severed.
-     */
     public override void dispose () {
-        unlink_network ();
+        Log.debug ("NetworkRow", "Row disposed");
+        // Do NOT access `network` or `signal_binding` here.
+        // The network is finalized by the list-store splice in
+        // rebuild_items() before the row is removed from the list box;
+        // signal handlers are auto‑disconnected by GLib during that
+        // finalization, and the binding is destroyed with the network.
+        // Both fields are `unowned` raw pointers and would be dangling
+        // after network finalization.
+        network = null;
         base.dispose ();
     }
 
@@ -72,6 +72,7 @@ public class WifiNetworkRow : Gtk.Box {
      */
     public WifiNetworkRow () {
         Object (orientation: Gtk.Orientation.VERTICAL, spacing: 0);
+        Log.debug ("NetworkRow", "Row created: %p", this);
         add_css_class ("wifi-list-item");
 
         row_box = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 12);
@@ -188,7 +189,9 @@ public class WifiNetworkRow : Gtk.Box {
      * @param item  The WifiListItem to render.
      */
     public void set_item (WifiListItem item) {
-        Logger.debug ("NetworkRow", "Setting item: kind=%s", item.kind.to_string ());
+        Log.debug ("NetworkRow", "Setting item: kind=%s network=%s",
+            item.kind.to_string (),
+            item.network != null ? item.network.ssid : "null");
         unlink_network ();
         set_hero (false);
 
@@ -196,6 +199,7 @@ public class WifiNetworkRow : Gtk.Box {
         row_box.visible = true;
 
         if (network == null) {
+            Log.debug ("NetworkRow", "  -> network is null, skipping");
             return;
         }
 
@@ -224,16 +228,18 @@ public class WifiNetworkRow : Gtk.Box {
      * cleans up GObject signal registrations so the row can be
      * safely destroyed or reused.
      *
-     * Since network is an owned reference, it is guaranteed to be valid
-     * during SignalHandler.disconnect. Breaking connections here prevents
-     * redundant signal traffic and helps break reference cycles that
-     * might involve property bindings.
+     * IMPORTANT: This must only be called when the network is
+     * known to be alive (i.e. from set_item when the row is being
+     * reused for a different network).  Do NOT call from dispose()
+     * — the network may already be finalized, and the pointer would
+     * be dangling.
      */
     public void unlink_network () {
         if (network == null) {
             return;
         }
 
+        Log.debug ("NetworkRow", "Unlinking network");
         if (connected_id != 0) {
             SignalHandler.disconnect (network, connected_id);
             connected_id = 0;
@@ -309,6 +315,7 @@ public class WifiNetworkRow : Gtk.Box {
      */
     private void update_status () {
         if (network == null) return;
+        Log.debug ("NetworkRow", "update_status: %s primary=%s", network.ssid, network.primary_status);
         var primary_status = network.primary_status;
         primary_status_label.label = primary_status;
         primary_status_label.visible = primary_status.length > 0;
@@ -357,6 +364,7 @@ public class WifiNetworkRow : Gtk.Box {
         if (network == null) {
             return;
         }
+        Log.debug ("NetworkRow", "update_metrics: %s", network.ssid);
 
         signal_metric_label.label = network.signal_dbm_text;
         signal_metric_label.visible = signal_metric_label.label.length > 0;

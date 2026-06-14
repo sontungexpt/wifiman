@@ -41,16 +41,18 @@ src/
   widgets/WifiNetworkRow.vala
                               Reusable GTK row used for network rendering
   utils/WifiUtils.vala        SSID, security, and channel helper functions
-  utils/Logger.vala           Async file logging with GLib integration
-                                and log rotation
+  utils/Logger.vala           Multi-category async logging with rotation
+                                and crash handlers (Log namespace)
 data/
   resources.gresource.xml     Resource manifest for CSS and UI assets
 style.css                    Theme-aware GTK CSS with @define-color variables
 docs/
   architecture.md            This file
-  changelog/
-      2026-06-11.md            Session changes
-      2026-06-12.md            Async logger, Cairo SignalIcon, bitrate fix, binding
+   changelog/
+       2026-06-11.md            Dialog lifecycle, signal icon, auto-connect guards
+       2026-06-12.md            Async logger, Cairo SignalIcon, bitrate fix, binding
+       2026-06-13.md            Local-function ABI crash, manual-connect guard, SSID fix
+       2026-06-14.md            Log namespace rewrite, signal shutdown, dead code
 ```
 
 ## Responsibilities
@@ -59,7 +61,7 @@ docs/
 
 - Owns the `Gtk.Application`
 - Handles activation and command-line `--version`, `--toggle`, and `--debug`
-- Initializes `Logger` with `--debug` flag for file logging
+- Initializes `Log` with `Log.Config` and installs crash handlers
 - Registers a `"toggle"` GAction for show/hide via CLI
 - Keeps startup minimal
 
@@ -129,8 +131,9 @@ docs/
   - `has_active_wifi_connection()` — refuses auto-connect when any wifi
     connection is already active/activating
 - Live scan freshness label via 5-second periodic timer
-- `shutdown()` cleans up all timers (`settle_scan_id`, `background_scan_id`,
-  `freshness_timer_id`, `_manual_connect_timeout_id`) and sets `_started = false`
+- `shutdown()` disconnects all service signal handlers, cleans up all timers
+  (`settle_scan_id`, `background_scan_id`, `freshness_timer_id`,
+  `_manual_connect_timeout_id`), and sets `_started = false`
 
 ### `NetworkManagerService`
 
@@ -142,8 +145,8 @@ docs/
 - Disconnects and forgets saved networks on request
 - Does not expose a saved-network list to the UI layer
 - Exposes the current connectivity state for portal / limited / full access
-- Tracks all signal handler IDs for cleanup in `disconnect_signals()`,
-  including `client.notify["connectivity"]` (`connectivity_notify_id`)
+- `shutdown()` disconnects all client signal handlers as well as per-device
+  and per-active-connection signal handlers, then clears tracking tables
 
 ### `WifiNetwork`
 
@@ -195,39 +198,83 @@ docs/
   are not connected — these properties are set once during AP discovery
   and never change, making their handlers dead code.
 - Stores `network` as `unowned` to break the reference cycle: signal closures
-  on the WifiNetwork keep the row alive, but the row no longer keeps the
-  network alive. When `rebuild()` removes a network from `networks_by_ssid`,
-  the network is finalized, signal handlers are disconnected, and the row
-  is finalized — no orphaned objects leak across scan cycles.
+   on the WifiNetwork (property notify handlers) keep the row alive. If the
+   row also held an owned reference to the network, the pair would form a cycle
+   that prevents either from being finalized. With `unowned`, the row does not
+   participate in the network's refcount — the network is kept alive by the
+   ViewModel's `networks_by_ssid` hash table. When `rebuild()` removes a network
+   from `networks_by_ssid`, the network is finalized, signal handlers are
+   auto-disconnected by GLib during finalization, and the row's last external
+   ref (from the container) drops it — no orphaned objects leak across scan
+   cycles.
 - All signal handler IDs are properly stored and disconnected in
-  `disconnect_network()` — no handler leaks across `set_item()` calls.
+   `unlink_network()` — no handler leaks across `set_item()` calls.
+   `unlink_network()` is only called while the network is still alive (from
+   `set_item()` when the row is being reused for a different network). It is
+   NOT called from `render_networks()` cleanup — the network is already
+   finalized by the list-store splice at that point, and the dangling `unowned`
+   pointer would cause GLib-GObject-CRITICALs.
 
-### `Logger`
+### `Log` (namespace, was `Logger`)
 
-- Logs to `~/.local/state/wifiman/wifiman.log` when file logging is enabled
-- Integrates with GLib logging APIs (`GLib.debug`, `GLib.message`, etc.) for
-  journald/stderr output
-- Structured format: `[timestamp] [LEVEL] [Module] message`
-- Configurable max file size with automatic rotation (renames to `.old`)
-- Guarded by `--debug` CLI flag — no file I/O when disabled
+Production-grade multi-category logging with size-based rotation and crash handling.
 
-**Asynchronous design:**
-- All public API methods (`debug`, `info`, `warn`, `error`) only enqueue a
-  `LogEntry` onto a lock-free `AsyncQueue` — they never perform file I/O
-- A dedicated writer thread (`"wifiman-log"`) consumes the queue:
-  - `timeout_pop(100ms)` provides batching — bursts are collected without
-    per-message wakeup
-  - After each batch, file size is checked and rotation is performed
-    atomically inside the writer thread
-  - The file handle is flushed after each batch
-- `debug()` and `info()` gate on `debug_on` (mirrors `--debug`) before any
-  formatting or GLib calls — true no-ops when `--debug` is not passed
-- `warn()` and `error()` always format and always go to journald regardless
-- `shutdown()` sets an atomic stop flag, pushes a sentinel entry to wake the
-  writer, then calls `join()` — guarantees all queued entries are flushed
-- The writer thread only exits after draining the queue and closing the file
-- Queue uses a full destroy function (`g_async_queue_new_full`) as a safety
-  net — any entries remaining on destruction are freed automatically
+**Architecture:**
+- Lock-free `AsyncQueue<LogEntry>` producer-consumer — callers never do I/O
+- Single dedicated writer thread pops entries, formats them, and writes to the
+  appropriate category file
+- Four category files in `~/.local/state/wifiman/logs/`:
+  - `app.log` — general application events
+  - `wifi.log` — Wi‑Fi scan, connect, disconnect
+  - `security.log` — authentication events
+  - `crash.log` — FATAL, GLib ERROR/CRITICAL, POSIX signals
+
+**Rotation (size-based):**
+- Default per-file limit: 2 MiB (configurable via `Config.max_file_size`)
+- Default rotated backups: 10 (configurable via `Config.max_rotated_files`)
+- Maximum total disk: 4 × 11 × 2 MiB ≈ 88 MiB
+- Rotates atomically on the writer thread — delete oldest, shift chain, rename
+  current, open new — no locks needed
+
+**Crash handling:**
+- `fatal()` sync-writes to crash.log via `Posix.write()` then calls
+  `GLib.message()` (not `critical()`) before `Posix.abort()` — using
+  `message()` avoids re-entering the GLib log hook, which would double-write
+  the FATAL entry to crash.log
+- GLib log hook captures `LEVEL_ERROR` and `LEVEL_CRITICAL` and writes them
+  synchronously to crash.log before calling the default handler
+- POSIX signal handlers for SIGSEGV, SIGABRT, SIGFPE, SIGBUS, SIGILL write a
+  diagnostic line to crash.log, restore default disposition, and re-raise to
+  generate a core dump
+- `_crash_fd` is pre-opened at init so signal handlers never call `open()`
+  (unsafe on a corrupt heap)
+
+**Levels and gating:**
+- `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`
+- `Config.level` controls minimum level written to files (default: `INFO`)
+- `verbose` flag (`--debug`) lowers the gate to `DEBUG` and prints
+  `INFO`/`DEBUG` to stderr via `GLib.message()`
+- Cheap integer `< _config.level` compare before queue push — no formatting
+  overhead for filtered levels
+
+**Public API:**
+- `Log.init(Config, bool verbose)` — create log dir, start writer thread
+- `Log.shutdown()` — drain queue, join writer, close crash fd
+- `Log.install_crash_handler()` — install GLib hook and POSIX signal handlers
+- `debug(module, fmt, ...)` / `info()` / `warn()` / `error()` / `fatal()` —
+  auto-route by module name (NetworkManager → WIFI, else APP)
+- `wifi(level, module, fmt, ...)` / `security(level, ...)` — explicit category
+
+**Lifecycle:**
+- Called from `Application.command_line()` before `activate()`
+- `shutdown()` called from `MainWindow.quit_application()`
+- Double-call safe (`_stopped` atomic, `_writer` nulled after join)
+
+**Optimizations:**
+- **Timestamp caching**: `timestamp()` caches the formatted ISO 8601 string and
+  only recomputes when `GLib.get_real_time() / 1000` (millisecond) changes.
+  In burst-logging scenarios this avoids one `DateTime.now_local()` allocation
+  and one `printf`-format per entry.
 
 ### `WifiUtils`
 
