@@ -389,21 +389,6 @@ public class WifiNetwork : GLib.Object {
     }
 
     /**
-     * Metrics text combining signal, bitrate, and scan age.
-     *
-     * @return A string like "-65 dBm  ·  1300 Mbps  ·  Updated 30s ago".
-     */
-    public string metrics_text {
-        owned get {
-            var builder = new GLib.StringBuilder ();
-            append_summary_part (builder, signal_detail);
-            append_summary_part (builder, bitrate_detail);
-            append_summary_part (builder, scan_age_text);
-            return builder.str;
-        }
-    }
-
-    /**
      * Detail summary for the network info dialog.
      *
      * @return A string with SSID, signal, bitrate, IP, gateway,

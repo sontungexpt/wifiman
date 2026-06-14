@@ -250,8 +250,13 @@ public class WifiNetworkRow : Gtk.Box {
         primary_status_label.remove_css_class ("connecting");
         primary_status_label.remove_css_class ("failed");
         primary_status_label.remove_css_class ("saved");
+        row_box.remove_css_class ("connected");
+        row_box.remove_css_class ("connecting");
+        row_box.remove_css_class ("failed");
+        row_box.remove_css_class ("saved");
         if (primary_status.length > 0) {
             primary_status_label.add_css_class (network.primary_status_style);
+            row_box.add_css_class (network.primary_status_style);
         }
     }
 

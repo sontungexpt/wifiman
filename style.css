@@ -626,9 +626,13 @@ popover radio:checked {
    DARK MODE
    ═══════════════════════════════════════════════════════════════*/
 
-.dark-mode,
+.dark-mode {
+    background: @dark-bg;
+}
+
 .dark-mode.dialog-window {
     background: @dark-bg;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
 }
 
 .dark-mode .dialog-actions {
@@ -700,6 +704,26 @@ popover radio:checked {
     color: @dark-text-secondary;
 }
 
+.dark-mode .status-badge.connected {
+    background: alpha(@dark-accent, 0.15);
+    color: @dark-accent;
+}
+
+.dark-mode .status-badge.connecting {
+    background: alpha(#22c55e, 0.12);
+    color: #22c55e;
+}
+
+.dark-mode .status-badge.saved {
+    background: alpha(white, 0.04);
+    color: @dark-text-secondary;
+}
+
+.dark-mode .status-badge.failed {
+    background: alpha(@dark-danger, 0.12);
+    color: @dark-danger;
+}
+
 .dark-mode .signal-icon {
     opacity: 0.85;
 }
@@ -754,6 +778,23 @@ popover radio:checked {
 .dark-mode .dialog-input:focus-within {
     border-color: @dark-accent;
     box-shadow: 0 0 0 3px alpha(@dark-accent, 0.12);
+}
+
+.dark-mode entry,
+.dark-mode passwordentry {
+    background: @dark-input;
+    border: 1px solid alpha(white, 0.06);
+    color: #f9fafb;
+}
+
+.dark-mode entry > text > placeholder,
+.dark-mode passwordentry > text > placeholder {
+    color: @dark-muted;
+}
+
+.dark-mode entry:focus-within,
+.dark-mode passwordentry:focus-within {
+    border-color: alpha(@dark-accent, 0.32);
 }
 
 .dark-mode .dialog-window button.dialog-cancel {
@@ -880,11 +921,12 @@ popover.dark-mode button:hover {
 
 .dark-mode headerbar button {
     color: @dark-text-secondary;
+    background: transparent;
 }
 
 .dark-mode headerbar button:hover {
     color: @dark-text;
-    background: alpha(white, 0.06);
+    background: alpha(white, 0.1);
 }
 
 .dark-mode .state-title {
@@ -899,8 +941,26 @@ popover.dark-mode button:hover {
     color: @dark-text-tertiary;
 }
 
+.dark-mode .details-expander {
+    color: @dark-text-secondary;
+}
+
 .dark-mode .dialog-error {
     background: alpha(@dark-danger, 0.1);
     border: 1px solid alpha(@dark-danger, 0.18);
     color: #fca5a5;
+}
+
+.dark-mode .dialog-error image {
+    color: #fca5a5;
+}
+
+popover.dark-mode check,
+popover.dark-mode radio {
+    color: @dark-text-secondary;
+}
+
+popover.dark-mode check:checked,
+popover.dark-mode radio:checked {
+    color: @dark-accent;
 }
