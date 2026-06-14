@@ -115,6 +115,12 @@ namespace Log {
          */
         public uint max_rotated_files { get; set; }
 
+        /**
+         * Delete rotated log files older than this many days.
+         * 0 (default) disables age-based cleanup.
+         */
+        public uint max_log_age_days { get; set; }
+
         public Config () {
             log_dir = Path.build_filename (
                 Environment.get_user_state_dir (), "wifiman", "logs"
@@ -123,6 +129,7 @@ namespace Log {
             format = Format.TEXT;
             max_file_size = 2 * 1024 * 1024;
             max_rotated_files = 10;
+            max_log_age_days = 0;
         }
     }
 
@@ -181,8 +188,12 @@ namespace Log {
     private static string _ts_cache;
     private static int64 _ts_cache_key;
 
+    // Last age‑based cleanup (microseconds since epoch).
+    private static int64 _last_cleanup = 0;
+
     private const int FLUSH_INTERVAL_US = 100000;
     private const int MAX_ROTATED_FILES_DEFAULT = 10;
+    private const int CLEANUP_INTERVAL_US = 60000000;  // check age once per minute
 
     // ═══════════════════════════════════════════════════════════════
     //  Timestamp helpers
@@ -312,6 +323,39 @@ namespace Log {
         }
     }
 
+    /**
+     * Delete rotated log files whose mtime exceeds max_log_age_days.
+     * Writer-thread only.  Only deletes rotated backups ("*.log.N"),
+     * never the current active files.
+     */
+    private static void cleanup_old_files () {
+        if (_config.max_log_age_days <= 0) return;
+
+        var now = GLib.get_real_time () / 1000000;
+        var max_age = _config.max_log_age_days * 86400;
+
+        try {
+            var dir = Dir.open (_config.log_dir, 0);
+            string? name = null;
+            while ((name = dir.read_name ()) != null) {
+                // Only rotated backups: "basename.log.<digits>"
+                // Skip active files like "app.log", "crash.log"
+                var dot_pos = name.last_index_of (".log.");
+                if (dot_pos < 0) continue;
+
+                var path = Path.build_filename (_config.log_dir, name);
+                Posix.Stat st;
+                if (Posix.stat (path, out st) != 0) continue;
+
+                if (now - st.st_mtime > max_age) {
+                    FileUtils.unlink (path);
+                }
+            }
+        } catch (Error e) {
+            // Directory missing or unreadable — skip cleanup
+        }
+    }
+
     // ═══════════════════════════════════════════════════════════════
     //  Formatting
     // ═══════════════════════════════════════════════════════════════
@@ -433,20 +477,15 @@ namespace Log {
                     close_all ();
                     break;
                 }
+                // Periodic age-based cleanup (once per minute)
+                var now = GLib.get_real_time ();
+                if (now - _last_cleanup >= CLEANUP_INTERVAL_US) {
+                    cleanup_old_files ();
+                    _last_cleanup = now;
+                }
             }
         }
         return null;
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    //  Core enqueue
-    // ═══════════════════════════════════════════════════════════════
-
-    private static void enqueue (Category cat, Level level, string module, string message) {
-        if (_queue == null) return;
-        // Level gate – cheap integer compare
-        if (level < _config.level) return;
-        _queue.push (new LogEntry (cat, level, module, message));
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -620,53 +659,43 @@ namespace Log {
     // ═══════════════════════════════════════════════════════════════
 
     public static void debug (string module, string format, ...) {
-        if (!_verbose) return;
+        if (!_verbose || _queue == null) return;
         var args = va_list ();
         var msg = format.vprintf (args);
-        if (_queue != null) {
-            _queue.push (new LogEntry (category_from_module (module), Level.DEBUG, module, msg));
-        }
+        _queue.push (new LogEntry (category_from_module (module), Level.DEBUG, module, msg));
     }
 
     public static void info (string module, string format, ...) {
-        if (_config.level > Level.INFO) return;
+        if (_queue == null || _config.level > Level.INFO) return;
         var args = va_list ();
         var msg = format.vprintf (args);
-        if (_queue != null) {
-            _queue.push (new LogEntry (category_from_module (module), Level.INFO, module, msg));
-        }
+        _queue.push (new LogEntry (category_from_module (module), Level.INFO, module, msg));
         if (_verbose) {
             GLib.message ("[%s] %s", module, msg);
         }
     }
 
     public static void warn (string module, string format, ...) {
-        if (_config.level > Level.WARN) return;
+        if (_queue == null || _config.level > Level.WARN) return;
         var args = va_list ();
         var msg = format.vprintf (args);
-        if (_queue != null) {
-            _queue.push (new LogEntry (category_from_module (module), Level.WARN, module, msg));
-        }
+        _queue.push (new LogEntry (category_from_module (module), Level.WARN, module, msg));
         GLib.warning ("[%s] %s", module, msg);
     }
 
     public static void error (string module, string format, ...) {
-        if (_config.level > Level.ERROR) return;
+        if (_queue == null || _config.level > Level.ERROR) return;
         var args = va_list ();
         var msg = format.vprintf (args);
-        if (_queue != null) {
-            _queue.push (new LogEntry (category_from_module (module), Level.ERROR, module, msg));
-        }
+        _queue.push (new LogEntry (category_from_module (module), Level.ERROR, module, msg));
         GLib.critical ("[%s] %s", module, msg);
     }
 
     public static void fatal (string module, string format, ...) {
         var args = va_list ();
         var msg = format.vprintf (args);
-        if (_queue != null) {
-            _queue.push (new LogEntry (Category.CRASH, Level.FATAL, module, msg));
-        }
-        // Sync write before aborting (bypasses the queue)
+        // Do NOT push to the queue — it will never be flushed before
+        // abort().  Write synchronously to crash.log instead.
         var line = format_text (
             timestamp (), Level.FATAL, module, msg
         );
@@ -680,14 +709,16 @@ namespace Log {
     // ═══════════════════════════════════════════════════════════════
 
     public static void wifi (Level level, string module, string format, ...) {
+        if (_queue == null || level < _config.level) return;
         var args = va_list ();
         var msg = format.vprintf (args);
-        enqueue (Category.WIFI, level, module, msg);
+        _queue.push (new LogEntry (Category.WIFI, level, module, msg));
     }
 
     public static void security (Level level, string module, string format, ...) {
+        if (_queue == null || level < _config.level) return;
         var args = va_list ();
         var msg = format.vprintf (args);
-        enqueue (Category.SECURITY, level, module, msg);
+        _queue.push (new LogEntry (Category.SECURITY, level, module, msg));
     }
 }
