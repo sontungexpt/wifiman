@@ -21,7 +21,7 @@ is visible in scan results.
 - Three color schemes: System, Light, Dark (persists across sessions)
 - Background scanning every 45 seconds
 - Custom Cairo-drawn signal icon (works with any icon theme)
-- Debug logging to file with `--debug`
+- Multi‑file logging with automatic rotation and crash diagnostics
 
 ## Build
 
@@ -41,7 +41,7 @@ Single-instance application — all invocations route to the same process.
 | `./build/wifiman` | Open window, or bring to focus if already running |
 | `./build/wifiman --toggle` | Open window, or hide/show existing instance |
 | `./build/wifiman --version` | Print version and exit |
-| `./build/wifiman --debug` | Open with file logging enabled |
+| `./build/wifiman --debug` | Open with verbose (DEBUG) logging |
 
 Closing the window hides it instead of quitting. Scanning and auto-connect
 continue in the background. Use `--toggle` or re-launch to bring it back.
@@ -65,6 +65,17 @@ After rebuilding, kill the old process first: `pkill wifiman`
 
 ## Logging
 
-With `--debug`, logs are written to `~/.local/state/wifiman/wifiman.log`
-and rotate automatically at 1 MB. Without the flag, messages go to
-journald (visible via `journalctl`).
+Logs are always written to `~/.local/state/wifiman/logs/`, split by
+category:
+
+| File | Contents |
+|---|---|
+| `app.log` | General application events |
+| `wifi.log` | Wi‑Fi scan, connect, disconnect events |
+| `security.log` | Authentication events |
+| `crash.log` | Fatal errors, GLib ERROR/CRITICAL, POSIX signals (SIGSEGV, SIGABRT) |
+
+Each file rotates automatically at 2 MiB, keeping up to 10 backups
+(~88 MiB max total).  With `--debug`, the minimum log level is lowered
+to DEBUG so verbose output appears in the category files.  Without it,
+only INFO and above are written.
